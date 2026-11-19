@@ -1,0 +1,167 @@
+/* 暗房冲印店：Chrome 61 基线写法（无 flex gap / aspect-ratio / inset / clamp） */
+:root {
+  --ink: #140b0a;
+  --ink-2: #1f1210;
+  --text: #ecdcd2;
+  --text-dim: #b99a8e;
+  --red: #c8372b;
+  --red-glow: rgba(214, 56, 44, 0.55);
+  --paper: #f3efe6;
+  --lit-bg: #ece6dc;
+  --lit-text: #2a1d18;
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --capsule-right: 104px;
+}
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; opacity: 0;
+}
+[hidden] { display: none !important; }
+
+body { -webkit-transition: background-color .9s ease; transition: background-color .9s ease; }
+body.is-lit { background: var(--lit-bg); color: var(--lit-text); }
+
+/* 顶部安全灯：暗房氛围 */
+.safelight {
+  position: absolute; left: 0; right: 0; top: 0; height: 60%;
+  background: radial-gradient(ellipse at 50% -10%, var(--red-glow), rgba(214, 56, 44, 0) 70%);
+  pointer-events: none; -webkit-transition: opacity .9s ease; transition: opacity .9s ease;
+}
+body.is-lit .safelight { opacity: 0; }
+
+.screen {
+  position: relative; -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0;
+  display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column;
+  padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+}
+
+.topbar { padding: 14px var(--capsule-right) 6px 20px; }
+
+/* 首屏 */
+.screen-intro .topbar { padding-top: 22px; }
+.intro-tray {
+  -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
+  padding: 10px 20px; overflow: hidden;
+}
+.intro-actions { padding: 0 20px 18px; text-align: center; }
+.intro-actions .btn { margin-top: 10px; }
+.intro-actions .btn:first-child { margin-top: 0; }
+
+/* 药盘与相纸 */
+.stage {
+  -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0; position: relative;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
+  padding: 8px 20px;
+}
+.tray {
+  position: relative; width: 62%; max-width: 320px;
+  background: #2b1714; border-radius: 14px; padding: 14px;
+  box-shadow: inset 0 0 0 2px #3a201b, inset 0 10px 30px rgba(0, 0, 0, .6), 0 8px 30px rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+.tray-static { width: 56%; max-width: 260px; }
+.tray-paper {
+  position: relative; width: 100%; padding-top: 133.33%;
+  background: var(--paper); border-radius: 2px; overflow: hidden;
+}
+.tray-paper canvas {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block;
+  -webkit-filter: grayscale(1); filter: grayscale(1);
+}
+.tray-paper-tag {
+  position: absolute; z-index: 2; right: 6px; top: 6px;
+  font-size: 11px; color: #fff; background: rgba(0, 0, 0, .45); padding: 1px 6px; border-radius: 3px;
+}
+/* 药水：一层会晃动的半透明液面 */
+.tray-liquid {
+  position: absolute; left: -20%; top: -20%; width: 140%; height: 140%;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(255, 255, 255, .10), rgba(255, 255, 255, 0) 40%),
+    radial-gradient(ellipse at 70% 65%, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 45%),
+    rgba(120, 60, 40, .10);
+  pointer-events: none; will-change: transform;
+}
+.tray-static .tray-liquid { -webkit-animation: slosh 3.2s ease-in-out infinite; animation: slosh 3.2s ease-in-out infinite; }
+.tray-liquid-calm { -webkit-animation: slosh 6s ease-in-out infinite; animation: slosh 6s ease-in-out infinite; }
+@-webkit-keyframes slosh { 0%, 100% { -webkit-transform: translate(-4%, 0); } 50% { -webkit-transform: translate(4%, 2%); } }
+@keyframes slosh { 0%, 100% { transform: translate(-4%, 0); } 50% { transform: translate(4%, 2%); } }
+/* 安全灯下只看得到红色的单色画面 */
+.tray-red {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  background: #b8261a; mix-blend-mode: multiply; pointer-events: none;
+}
+
+/* 步骤 */
+.steps { list-style: none; display: -webkit-box; display: flex; font-size: 13px; color: var(--text-dim); }
+.steps li { margin-right: 18px; position: relative; }
+.steps li.is-on { color: #ffb4a6; font-weight: 600; }
+.steps li.is-done { color: #7d5f55; text-decoration: line-through; }
+
+/* 下方操作区 */
+.panel { padding: 6px 20px 18px; text-align: center; }
+.readout {
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
+  font-size: 12px; color: var(--text-dim);
+}
+.readout-time {
+  font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 26px; color: #ffcfc5;
+  margin-right: 14px; letter-spacing: 1px;
+}
+.readout-label { margin-right: 8px; }
+.meter { display: inline-block; width: 90px; height: 6px; background: #3a221d; border-radius: 3px; overflow: hidden; }
+.meter-fill { display: block; height: 100%; width: 0; background: #ff7a63; -webkit-transition: width .15s linear; transition: width .15s linear; }
+.hint { margin: 8px 0 12px; font-size: 14px; color: var(--text); min-height: 20px; }
+.status { margin-top: 10px; font-size: 12px; color: var(--text-dim); min-height: 16px; }
+
+/* 按钮 */
+.btn {
+  display: block; width: 100%; max-width: 320px; margin: 0 auto; height: 48px; line-height: 48px;
+  border: 0; border-radius: 10px; font-size: 16px; font-family: inherit; cursor: pointer;
+  -webkit-appearance: none; appearance: none; text-align: center;
+}
+.btn:active { opacity: .75; }
+.btn:focus { outline: 2px solid #ffb4a6; outline-offset: 2px; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn-primary { background: var(--red); color: #fff4ee; font-weight: 600; }
+.btn-ghost { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px #5a3a32; }
+.btn-text { background: transparent; color: var(--text-dim); height: 40px; line-height: 40px; font-size: 14px; }
+
+.btn-hold { position: relative; overflow: hidden; background: #3a221d; color: #fff4ee; font-weight: 600; touch-action: none; }
+.hold-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--red); }
+.hold-text { position: relative; }
+#lights-on { margin-top: 10px; }
+
+/* 开灯后的出片页 */
+.screen-result { color: var(--lit-text); }
+.result-scroll {
+  -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 18px 20px 20px; text-align: center;
+}
+.result-card { display: inline-block; max-width: 78%; box-shadow: 0 10px 28px rgba(60, 30, 20, .25); }
+.result-card img { display: block; width: 100%; height: auto; max-height: 58vh; }
+.result-meta { margin: 14px 0 6px; }
+.result-title { font-family: "Songti SC", "STSong", "SimSun", serif; font-size: 22px; letter-spacing: 2px; }
+.result-report { margin-top: 6px; font-size: 13px; color: #7a6359; line-height: 1.6; }
+.result-actions .btn { margin-top: 10px; }
+.screen-result .btn-ghost { color: var(--lit-text); box-shadow: inset 0 0 0 1px #c9b8ac; }
+.screen-result .btn-text { color: #7a6359; }
+.screen-result .status { color: #7a6359; }
+
+/* 半屏小框里收紧留白 */
+@media (max-height: 560px) {
+  .screen-intro .topbar { padding-top: 12px; }
+  .intro-title { font-size: 24px; }
+  .intro-sub { font-size: 13px; }
+  .btn { height: 42px; line-height: 42px; font-size: 15px; }
+  .readout-time { font-size: 22px; }
+  .hint { margin: 4px 0 8px; }
+  .result-card img { max-height: 46vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray-static .tray-liquid, .tray-liquid-calm { -webkit-animation: none; animation: none; }
+  body, .safelight { -webkit-transition: none; transition: none; }
+}
