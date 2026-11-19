@@ -1,0 +1,4 @@
+# 打包产物：可由对应 git tag 重新打出
+releases/
+# Agent 协作过程材料：截图、给 Gemini 的规格和原始回答
+.review/

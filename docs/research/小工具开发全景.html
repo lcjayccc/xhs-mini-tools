@@ -1,0 +1,377 @@
+<title>小红书小工具开发全景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 布局：左侧窄目录 + 右侧单栏正文；手机端目录收成顶部横向条。主色是印泥朱红，只用在步骤编号与关键标记上 */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --ink:#1b2230; --muted:#5b6474; --line:#dde1e8;
+  --accent:#c8322a; --accent-soft:#fbe9e7; --ok:#1f7a4d; --ok-soft:#e3f3ea; --warn:#9a6200; --warn-soft:#fdf1d8; --bad:#a3261f; --bad-soft:#fbe4e2;
+  --code-bg:#eef1f5;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-num:"Space Grotesk","Noto Sans SC",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2c3441;
+  --accent:#ff6b5e; --accent-soft:#3a1f1d; --ok:#5fd19a; --ok-soft:#163327; --warn:#f0b54a; --warn-soft:#3a2d12; --bad:#ff8a80; --bad-soft:#3d1e1c;
+  --code-bg:#232a35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2c3441;
+  --accent:#ff6b5e; --accent-soft:#3a1f1d; --ok:#5fd19a; --ok-soft:#163327; --warn:#f0b54a; --warn-soft:#3a2d12; --bad:#ff8a80; --bad-soft:#3d1e1c;
+  --code-bg:#232a35; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:40px;padding-block:40px 80px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:2px;font-size:13px}
+nav.toc a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);background:var(--surface);outline:none}
+nav.toc .toc-h{font-family:var(--f-num);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:0 10px 8px}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+h1{font-size:30px;line-height:1.3;margin:0;font-weight:900;text-wrap:balance}
+h2{font-size:21px;margin:0 0 6px;font-weight:700;text-wrap:balance}
+h3{font-size:16px;margin:0 0 6px;font-weight:700}
+p{margin:0}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.sub{color:var(--muted);font-size:14px;max-width:68ch;margin-bottom:18px}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px;word-break:break-word}
+a{color:var(--accent)}
+
+/* 结论条 */
+.verdict{margin-top:22px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.vcell{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.vcell .k{font-size:12px;color:var(--muted)}
+.vcell .v{font-weight:700;font-size:16px}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap;vertical-align:1px}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)} .p-bad{background:var(--bad-soft);color:var(--bad)}
+.src{font-family:var(--f-num);font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
+
+/* 流程步进器 */
+.flow{display:grid;grid-template-columns:260px minmax(0,1fr);gap:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.steps{list-style:none;margin:0;padding:8px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.steps button{all:unset;cursor:pointer;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;width:100%;box-sizing:border-box;font-size:14px}
+.steps button:hover{background:var(--bg)}
+.steps button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.steps button[aria-selected="true"]{background:var(--accent-soft)}
+.steps .n{font-family:var(--f-num);font-weight:700;font-size:13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);color:var(--muted)}
+.steps button[aria-selected="true"] .n{border-color:var(--accent);color:var(--accent)}
+.steps .who{display:block;font-size:11.5px;color:var(--muted);line-height:1.3}
+.phase{font-size:11px;letter-spacing:.1em;color:var(--muted);padding:10px 10px 2px;font-family:var(--f-num)}
+.detail{padding:22px 26px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.detail .meta{display:flex;flex-wrap:wrap;gap:8px;font-size:12.5px;color:var(--muted)}
+.detail ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.detail pre{margin:0;background:var(--code-bg);border-radius:8px;padding:12px 14px;overflow-x:auto;font-family:var(--f-mono);font-size:12.5px;line-height:1.6}
+.callout{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 14px;border-radius:0 8px 8px 0;font-size:14px}
+.callout.red{border-color:var(--bad);background:var(--bad-soft)}
+.callout.green{border-color:var(--ok);background:var(--ok-soft)}
+
+/* 规范 tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tabs button{all:unset;cursor:pointer;font-size:13.5px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 0}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{white-space:nowrap}
+
+/* 清单 */
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cgroup{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.cgroup label{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:14px;cursor:pointer}
+.cgroup input{margin-top:5px;accent-color:var(--accent)}
+.cgroup .hint{display:block;color:var(--muted);font-size:12.5px}
+.state{font-size:11.5px;font-weight:700}
+.counter{font-family:var(--f-num);font-size:13px;color:var(--muted)}
+
+/* 坑 */
+.pits{display:flex;flex-direction:column;gap:10px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 18px}
+summary{cursor:pointer;padding:13px 0;font-weight:500;list-style:none;display:flex;gap:10px;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--f-num);color:var(--accent);font-weight:700;width:12px;flex:none}
+details[open] summary::before{content:"−"}
+details .body{padding:0 0 14px 22px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:6px}
+.unknown li{margin-bottom:4px}
+.sources{font-size:13.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+
+@media (max-width:860px){
+  .wrap{grid-template-columns:minmax(0,1fr);gap:24px;padding-block:20px 60px}
+  nav.toc{position:static;flex-direction:row;flex-wrap:wrap;gap:4px}
+  nav.toc .toc-h{display:none}
+  nav.toc a{background:var(--surface);border:1px solid var(--line)}
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .steps{border-right:0;border-bottom:1px solid var(--line);flex-direction:row;overflow-x:auto;flex-wrap:nowrap}
+  .steps li.phase{display:none}
+  .steps button{grid-template-columns:26px;width:auto;padding:6px}
+  .steps .lbl{display:none}
+  .detail{padding:18px}
+  .verdict,.checks{grid-template-columns:minmax(0,1fr)}
+  h1{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="目录">
+  <div class="toc-h">Contents</div>
+  <a href="#status">现在能不能做</a>
+  <a href="#flow">完整流程</a>
+  <a href="#rules">官方硬规范</a>
+  <a href="#api">平台能力</a>
+  <a href="#form">发布表单</a>
+  <a href="#prep">准备清单</a>
+  <a href="#pits">容易踩的坑</a>
+  <a href="#money">变现现实</a>
+  <a href="#unknown">还不确定的</a>
+  <a href="#sources">来源</a>
+</nav>
+
+<main>
+<header>
+  <h1>小红书小工具：从想法到挂在笔记下面</h1>
+  <p class="lede">小工具就是一个<strong>离线运行的网页</strong>：你写 HTML/CSS/JS，打成 zip 上传，审核通过后挂到笔记下面，用户点开就能用，不需要下载 App。这一页把流程、官方规范、要准备的东西和坑放在一起。整理时间是 2026-11-18（北京时间），官方文档标注的最后更新日期是 2026-11-13。</p>
+  <div class="verdict">
+    <div class="vcell"><span class="k">发布功能</span><span class="v">内测中 <span class="pill p-warn">邀请/部分开放</span></span><span class="k">没有公开的申请入口 <span class="src">B</span></span></div>
+    <div class="vcell"><span class="k">你的账号</span><span class="v">CLI 接口已通 <span class="pill p-ok">推论：有入口</span></span><span class="k">config / list 实测成功，还没送审过 <span class="src">D 实测</span></span></div>
+    <div class="vcell"><span class="k">赚钱</span><span class="v">赞赏内测 <span class="pill p-bad">要单独开通</span></span><span class="k">变现内测 11 月起邀请制 <span class="src">A+B</span></span></div>
+  </div>
+</header>
+
+<section id="status">
+  <h2>现在能不能做</h2>
+  <p class="sub">来源等级：A 官方文档，B 媒体报道，C 个人经验，D 我在你电脑上的实测。</p>
+  <div class="panel"><div class="tbl"><table>
+    <thead><tr><th>事项</th><th>状态</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>小工具发布</td><td><span class="pill p-warn">内测</span></td><td>2026 年 7 月 WAIC（世界人工智能大会）宣布，8 月上线，向部分创作者开放；管理入口在创作服务平台的 Builder Hub → 小工具 <span class="src">B</span></td></tr>
+      <tr><td>普通用户使用</td><td><span class="pill p-ok">已上线</span></td><td>在笔记或评论里点开就能用；头部工具玩家超过 200 万，约七成作者不是专业开发者 <span class="src">B</span></td></tr>
+      <tr><td>你的权限</td><td><span class="pill p-ok">接口已通</span></td><td>redapp CLI（官方小工具命令行）已登录，<code>config</code> 返回 7 个类目和 5 种权限，<code>list</code> 返回 0 个作品。真正能否发布，要等第一次送审才能确认 <span class="src">D</span></td></tr>
+      <tr><td>AI 文本生成</td><td><span class="pill p-warn">内测加白</span></td><td>需要进群提交 uid（用户 ID）加白名单；每个用户每天 100 次；用了它的小工具暂时不能通过第三方 Agent 上传 <span class="src">A</span></td></tr>
+      <tr><td>云存储 / 排行榜</td><td><span class="pill p-warn">内测</span></td><td>客户端 9.51 及以上 <span class="src">A</span></td></tr>
+      <tr><td>赞赏 / 赞赏挽留</td><td><span class="pill p-warn">内测</span></td><td>客户端 9.53.3 及以上，要先开通赞赏能力；开通审批流程文档没写 <span class="src">A</span></td></tr>
+      <tr><td>变现内测</td><td><span class="pill p-bad">邀请制</span></td><td>11 月开始，平台挑选优质小工具开发者邀请，具体规则后续公布 <span class="src">B</span></td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section id="flow">
+  <h2>完整流程</h2>
+  <p class="sub">点左边的步骤看细节。“谁来做”一栏写的是：哪些我能替你跑，哪些必须你本人在手机或网页上操作。</p>
+  <div class="flow">
+    <ul class="steps" role="tablist" aria-label="流程步骤" id="steps"></ul>
+    <div class="detail" id="detail" role="tabpanel" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="rules">
+  <h2>官方硬规范</h2>
+  <p class="sub">违反这些规范，轻则部署失败，重则页面打开后白屏。以官方在线文档为准 <span class="src">A</span>。</p>
+  <div class="tabs" role="tablist" id="ruleTabs"></div>
+  <div class="panel" id="rulePanel"></div>
+</section>
+
+<section id="api">
+  <h2>平台能力（<code>window.xhs.miniTool</code>）</h2>
+  <p class="sub">浏览器原生能力被关掉的那些，平台用自己的 API（接口）补回来一部分。<strong>每个接口都有最低客户端版本</strong>，调用前要判断方法存不存在，不存在就隐藏入口。</p>
+  <div class="panel"><div class="tbl"><table>
+    <thead><tr><th>能力</th><th>接口</th><th>最低客户端</th><th>要点</th></tr></thead>
+    <tbody>
+      <tr><td>发布笔记</td><td><code>postNote</code></td><td class="num">基础</td><td>标题 ≤20 字，正文 ≤1000 字；图片 1–18 张或视频 1 个。成功只代表用户点了发布，不代表审核通过</td></tr>
+      <tr><td>存相册 / 临时文件</td><td><code>saveImageToPhotosAlbum</code> <code>writeTempFile</code></td><td class="num">9.42</td><td>图片类工具的出口，代替“下载”</td></tr>
+      <tr><td>本地缓存</td><td><code>setStorage</code> 等</td><td class="num">9.46.0</td><td>单个 key ≤1 MB，合计 ≤10 MB；localStorage 只当低版本兜底</td></tr>
+      <tr><td>文件系统</td><td>持久文件、分片读写</td><td class="num">9.49</td><td></td></tr>
+      <tr><td>评论区互动</td><td><code>interactionOpenApi</code></td><td class="num">9.49</td><td></td></tr>
+      <tr><td>窗口信息 / 定位</td><td><code>getWindowInfo</code> <code>getLocation</code></td><td class="num">9.49</td><td>只有单次定位；精确坐标不要写进日志或埋点</td></tr>
+      <tr><td>振动</td><td><code>vibrateShort</code> <code>vibrateLong</code></td><td class="num">9.50</td><td></td></tr>
+      <tr><td>陀螺仪</td><td>启停与监听</td><td class="num">9.50</td><td>代替被禁用的 DeviceOrientation</td></tr>
+      <tr><td>关注作者</td><td><code>followAuthor</code> <code>getFollowStatus</code></td><td class="num">9.51</td><td><strong>引流的关键</strong></td></tr>
+      <tr><td>云存储 <span class="pill p-warn">内测</span></td><td><code>addCloudStorage</code> 等</td><td class="num">9.51</td><td>单批 ≤100 条，单条 ≤64 KB，默认 150 QPS（每秒请求数）</td></tr>
+      <tr><td>排行榜 <span class="pill p-warn">内测</span></td><td><code>submitScore</code> <code>getRankList</code></td><td class="num">9.51</td><td>分数在 ±1,000,000 之间；上传时必须勾选“用户头像昵称授权”</td></tr>
+      <tr><td>分享</td><td><code>share</code></td><td class="num">9.53</td><td>只在全屏模式可用；每个用户每天每个工具最多 10 次；图片只能私信站内</td></tr>
+      <tr><td>Worker</td><td>Dedicated Worker</td><td class="num">9.53</td><td>每页 1 个，页面隐藏 30 秒后会被回收</td></tr>
+      <tr><td>赞赏 <span class="pill p-warn">内测</span></td><td><code>rewardAuthor</code> <code>setCloseRetentionEnabled</code></td><td class="num">9.53.3</td><td>先查发布配置里的赞赏开关再展示入口；回调结果里没有金额</td></tr>
+      <tr><td>AI 文本 <span class="pill p-warn">加白</span></td><td><code>window.xhs.AI</code></td><td class="num">加白</td><td>不支持流式输出；单次 ≤40 条消息、≤12000 字，输出 ≤2048 tokens；输入输出都会过内容审核</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section id="form">
+  <h2>发布表单要填什么</h2>
+  <p class="sub">这些限制在网页端和 CLI 里不完全一样，按网页端的要求准备最稳妥 <span class="src">A 源码核对</span>。</p>
+  <div class="panel"><div class="tbl"><table>
+    <thead><tr><th>字段</th><th>要求</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>名称</td><td class="num">≤ 14 字符</td><td>emoji 一般按 2 个字符算</td></tr>
+      <tr><td>一句话简介</td><td class="num">≤ 14 字符</td><td>说清楚用途就行，14 个字很短，要提前想好</td></tr>
+      <tr><td>图标</td><td>JPG/PNG · ≤5 MiB · 1:1</td><td>网页端会自动裁成 512×512</td></tr>
+      <tr><td>封面</td><td>JPG/PNG · ≤10 MiB · 3:4</td><td>在笔记卡片里，封面比图标更显眼</td></tr>
+      <tr><td>代码包</td><td>ZIP · ≤10 MiB · 解压 ≤30 MiB</td><td>根目录下直接是 index.html；建议压到 2 MiB 以内</td></tr>
+      <tr><td>版本号</td><td><code>1.0.0</code></td><td>三段数字，不能加 beta 后缀；每次更新都要换新号</td></tr>
+      <tr><td>类目</td><td>单选</td><td>生活方式 / 休闲玩法 / 图像创作 / 学习知识 / 实用工具 / 娱乐测试 / 其他 <span class="src">D 实测</span></td></tr>
+      <tr><td>权限</td><td>按需勾选</td><td>相册照片与视频 / 摄像头 / 麦克风 / 位置 / 用户头像和昵称。没有需要就选“不需要权限”，不要因为省事全选</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section id="prep">
+  <h2>准备清单</h2>
+  <p class="sub">打勾状态只保存在你这台设备的浏览器里。标了“已具备”的是我这次实际查过的。<span class="counter" id="cnt"></span></p>
+  <div class="checks" id="checks"></div>
+</section>
+
+<section id="pits">
+  <h2>容易踩的坑</h2>
+  <div class="pits">
+    <details open><summary>在普通浏览器里能跑，不等于在小工具里能跑</summary><div class="body"><p>容器有 CSP（内容安全策略，限制页面能加载和执行什么），会禁止内联脚本、联网请求和 module 脚本，这些在 Chrome 里都能正常运行。只有本地模拟器、Android 真机、iOS 真机三处都测过才算数。</p></div></details>
+    <details open><summary>脚本写在 HTML 里，或者用了 <code>type="module"</code></summary><div class="body"><p>这是最常见的白屏原因：页面渲染出来了，JS 完全不执行。所有 JS 都放进 <code>.js</code> 文件，用 <code>&lt;script src&gt;</code> 引入，事件用 <code>addEventListener</code> 绑定。如果用 Vite 之类的工具构建，要把输出改成经典脚本，并且编译到 ES2017。</p></div></details>
+    <details><summary>打包时多套了一层文件夹</summary><div class="body"><p>先进入 dist 目录再压缩里面的内容，不要压缩 dist 文件夹本身。否则解压后路径是 <code>dist/index.html</code>，容器找不到入口。</p></div></details>
+    <details><summary>依赖外部接口的点子在这里做不了</summary><div class="body"><p>页面不能直连外网，CDN 不行，自己的后端也不行。查天气、查快递、调用 OpenAI 这类需要实时数据的点子都要放弃，或者改成平台 AI 能力（需要加白）。数据只能随包带上，大型数据集也不适合塞进包里。</p></div></details>
+    <details><summary>本地 Skill 的规则和官方在线文档对不上</summary><div class="body"><p>本地随包基线写的是“Worker 不可用、陀螺仪不可用”，在线文档已经开放了 Worker（9.53 起）和陀螺仪 API（9.50 起）。以在线文档为准，本地 Skill 只能当快照用。localStorage 是否可用，文档自己前后也有矛盾，所以统一用 <code>setStorage</code>。</p></div></details>
+    <details><summary>审核通过后用户还看不到</summary><div class="body"><p>小工具发布后不会自己出现在信息流里，要你<strong>发一篇笔记并在笔记里挂载它</strong>，用户才能从笔记下方打开。所以每个小工具都要配一篇笔记。<span class="src">C</span></p></div></details>
+    <details><summary>CLI 能做的和网页端不完全一样</summary><div class="body"><p>CLI 能上传、预览、送审、查状态、改名称和图标，但不能勾选《小工具发布安全规范》协议，也不能配置高级能力，而且没有删除、下架命令。这些要在网页端的 Builder Hub 里操作。用了内测 AI 接口的小工具，目前也只能在网页端上传。</p></div></details>
+    <details><summary>手机客户端版本太旧</summary><div class="body"><p>赞赏要 9.53.3，分享要 9.53，排行榜要 9.51。测试手机先把小红书更新到最新版。另外别忘了，你的用户里也有旧版本客户端，所以每个高级能力都要做降级处理。</p></div></details>
+  </div>
+</section>
+
+<section id="money">
+  <h2>变现现实</h2>
+  <div class="callout red"><strong>官方目前只公开了一条直接收钱的路：赞赏。</strong>它还在内测，要单独开通，回调里拿不到金额，也没有公开的分成或结算规则。变现内测是平台挑人邀请，不接受申请。</div>
+  <p class="sub" style="margin-top:14px">所以比较现实的顺序是：先用小工具给账号引流（工具内可以关注作者，笔记带工具），把使用量做起来，进入平台视野之后争取变现邀请；赞赏开通后再接进去。“工具使用量能换来邀请”这一点是推论，平台没有公布挑选标准。</p>
+</section>
+
+<section id="unknown">
+  <h2>还不确定的</h2>
+  <ul class="unknown">
+    <li>你的账号能否发布：接口已通，但只有第一次送审被受理，才能最终确认。</li>
+    <li>审核标准、审核时长、驳回原因：官方没有公开，只能靠第一次送审摸清楚。</li>
+    <li>赞赏开通的申请路径和条件：文档没写，可能要进内测群询问。</li>
+    <li>AI 能力加白的群在哪：文档提到“在群内提交 uid”，入口没写。</li>
+    <li>小红书社区规则（诱导、导流、搬运等）同样适用于挂工具的笔记，详细条款在创作者中心 → 安全中心 → 规则百科。<span class="src">C</span></li>
+  </ul>
+</section>
+
+<section id="sources">
+  <h2>来源</h2>
+  <div class="sources">
+    <span>A · <a href="https://miniapp-sandbox.xiaohongshu.com/minitool/doc" target="_blank" rel="noopener">小工具容器能力官方文档</a>（最后更新 2026-11-13）</span>
+    <span>A · 本机 Skill：minitool-zip-builder v1.11.1、redapp-cli（字段限制是对照网页端源码整理的）</span>
+    <span>B · <a href="https://finance.sina.com.cn/tech/roll/2026-11-07/doc-inixwhsh4912480.shtml" target="_blank" rel="noopener">新浪科技 2026-11-07：网友用 AI 搓出来的 App</a></span>
+    <span>B · <a href="https://www.sohu.com/a/1052479093_122066678" target="_blank" rel="noopener">搜狐：小红书内测小工具功能</a></span>
+    <span>B · <a href="https://news.qq.com/rain/a/20260720A0A76P00" target="_blank" rel="noopener">腾讯新闻：7300 个 Skill、16 万开发者</a></span>
+    <span>C · <a href="https://www.woshipm.com/ai/6432615.html" target="_blank" rel="noopener">人人都是产品经理：10 分钟做、5 分钟发布</a></span>
+    <span>D · 2026-11-18 在本机执行 <code>redapp whoami / config / list</code>（CLI 1.0.5，prod 环境）</span>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+  var STEPS=[
+    {phase:"想",t:"选题",who:"你定方向，我可以帮你筛",meta:["不花钱","决定成败"],
+     body:"<p>先用“能不能离线跑”过滤点子：所有数据和计算都在手机本地完成的才能做。适合的类型有测试/人格测验、计算器/换算、图片处理（加边框、拼图、水印）、小游戏、知识卡片、抽签/随机选择。</p><ul><li>看一下<strong>有没有现成的搜索需求</strong>：小红书上很多人在问、但现在只能靠截图回答的问题，最适合做成工具。</li><li>想好它挂在什么笔记下面，工具和内容要配套。</li><li>类目选一个：生活方式、休闲玩法、图像创作、学习知识、实用工具、娱乐测试、其他。</li></ul><div class='callout'>依赖实时数据或外部 API 的点子直接排除，平台不允许页面联网。</div>"},
+    {phase:"做",t:"写页面",who:"我用 minitool-zip-builder 写",meta:["HTML/CSS/JS","以 index.html 为入口"],
+     body:"<p>按正常网页来写，但从第一行起就遵守容器规则：</p><ul><li>JS 放在外部 <code>.js</code> 文件，经典脚本，ES2017 语法；不用 <code>type=module</code>，不写内联事件。</li><li>图片、字体、数据全部放进包里，用相对路径引用。</li><li>需要平台能力（存相册、缓存、关注、分享）时用 <code>window.xhs.miniTool</code>，调用前先判断方法是否存在。</li><li>先设计好首屏：JS 还没执行时，页面上就应该有内容。</li></ul>"},
+    {phase:"做",t:"本地模拟器调试",who:"我能跑",meta:["需要 Node 20+","你本机是 v24.22.1"],
+     body:"<p>官方 CLI 自带模拟器，改代码后页面会自动刷新，不需要登录，也不用填表单。</p><pre>redapp dev --dir \"./dist\" --agent</pre><ul><li>第一次运行会自动安装 <code>@skillbuilder/miniapp-simulator@0.2.0</code>。</li><li>工作台里可以切换设备和展示模式（半屏 / 全屏）。</li></ul><div class='callout'>模拟器通过不代表真机没问题，送审前必须用手机扫码预览。</div>"},
+    {phase:"做",t:"打包与审计",who:"我能跑",meta:["≤10 MiB","建议 ≤2 MiB"],
+     body:"<ul><li>进入产物目录，压缩<strong>目录里的内容</strong>，确保 index.html 在 zip 根目录。</li><li>包里不能有源码、node_modules、.map 调试文件、凭证。</li><li>允许的文件类型：html、css、js、常见图片、woff/woff2、json。</li><li>用 Skill 自带的审计脚本检查体积和违规 API，必须全部通过。</li></ul>"},
+    {phase:"发",t:"准备发布素材",who:"你定名称和文案，我检查",meta:["名称 ≤14","简介 ≤14"],
+     body:"<ul><li>名称、一句话简介，各自不超过 14 个字符。</li><li>图标：正方形，JPG/PNG，≤5 MiB。</li><li>封面：3:4，JPG/PNG，≤10 MiB。</li><li>版本号从 <code>1.0.0</code> 开始。</li><li>权限：只勾实际要用的。用到排行榜的，必须勾“用户头像和昵称”。</li></ul>"},
+    {phase:"发",t:"上传",who:"我能跑（CLI）或你在网页端",meta:["两种入口"],
+     body:"<p><strong>入口一：网页端</strong>，创作服务平台 → Builder Hub → 小工具。上传页第一步会给一段“改写口令”，交给 AI 助手生成规范代码；第二步上传 zip。每次都要用页面上最新的口令。</p><p><strong>入口二：CLI</strong>，你的账号已经登录。上传代码包、图标、封面，每个文件都先 dry-run（只看计划不执行）再确认。</p><pre>redapp upload --file \"./app.zip\" --type pkg --dry-run --agent</pre><div class='callout'>用了内测 AI 接口，或者要勾选安全规范协议、配置高级能力的，只能走网页端。</div>"},
+    {phase:"发",t:"手机扫码预览",who:"必须你本人",meta:["Android + iOS 都要测"],
+     body:"<p>CLI 会生成预览二维码，你分别用 Android 和 iOS 手机扫码，把主要功能都走一遍。</p><pre>redapp preview --source thirdAgent --file \"./preview.json\" --agent ...</pre><ul><li>重点看：首屏加载速度、触摸操作、刘海屏和安全区、半屏/全屏切换、旧版客户端的降级表现。</li><li>你明确说“预览通过”之后，我才会送审。</li></ul>"},
+    {phase:"发",t:"送审",who:"我能跑，需要你授权",meta:["submitted ≠ 已发布"],
+     body:"<pre>redapp submit --source thirdAgent --file \"./submit.json\" --agent ...</pre><ul><li>返回 <code>submitted</code> 只代表平台受理了，不代表审核通过。</li><li>用 <code>redapp status</code> 查进度和驳回原因。</li><li>审核标准和时长官方没公开，第一次送审就是用来摸规则的。</li></ul>"},
+    {phase:"运营",t:"发笔记并挂载",who:"必须你本人",meta:["不挂就没人看见"],
+     body:"<p>审核通过后，小工具还不会出现在任何地方。你要<strong>发一篇笔记，在发布时添加这个小工具</strong>，它才会显示在笔记下方。</p><ul><li>笔记内容要和工具配套，比如演示效果、讲清楚使用场景。</li><li>笔记同样遵守社区规则，不能诱导分享，也不能导流站外。</li></ul>"},
+    {phase:"运营",t:"迭代与变现",who:"一起",meta:["更新要换版本号"],
+     body:"<ul><li>改代码要发新版本，版本号递增，每次都要重新预览、重新送审。</li><li>只改名称、简介或图标，用 <code>redapp edit</code>，不用重新送审代码。</li><li>下架、删除要去网页端，CLI 没有这两个命令。</li><li>工具里接入“关注作者”来给账号引流；赞赏开通后再加赞赏入口。</li></ul>"}
+  ];
+  var ul=document.getElementById("steps"),det=document.getElementById("detail"),lastPhase="";
+  STEPS.forEach(function(s,i){
+    if(s.phase!==lastPhase){var ph=document.createElement("li");ph.className="phase";ph.textContent=s.phase;ul.appendChild(ph);lastPhase=s.phase}
+    var li=document.createElement("li"),b=document.createElement("button");
+    b.setAttribute("role","tab");b.id="st"+i;
+    b.innerHTML="<span class='n'>"+(i+1)+"</span><span class='lbl'>"+s.t+"<span class='who'>"+s.who+"</span></span>";
+    b.title=s.t;
+    b.addEventListener("click",function(){show(i)});
+    b.addEventListener("keydown",function(e){
+      if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();show(Math.min(i+1,STEPS.length-1),true)}
+      if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();show(Math.max(i-1,0),true)}
+    });
+    li.appendChild(b);ul.appendChild(li);
+  });
+  function show(i,focus){
+    var s=STEPS[i];
+    ul.querySelectorAll("button").forEach(function(b,j){b.setAttribute("aria-selected",j===i?"true":"false");b.tabIndex=j===i?0:-1});
+    det.innerHTML="<div class='meta'><span class='pill p-ok'>"+s.who+"</span>"+s.meta.map(function(m){return "<span class='src'>"+m+"</span>"}).join("")+"</div><h3>"+(i+1)+". "+s.t+"</h3>"+s.body;
+    if(focus)document.getElementById("st"+i).focus();
+  }
+  show(0);
+
+  var RULES={
+    "包结构":[["入口","<code>index.html</code> 必须放在 zip 根目录，而且只能有一个"],["文件类型","html、css、js、常见图片、woff/woff2、json；其他后缀不允许"],["大小","zip ≤10 MiB（上限），建议 ≤2 MiB；解压后 ≤30 MiB"],["Base64","单条解码后 ≤1 MiB，超过 100 KiB 就改成单独的文件"],["资源外移","9.53.3 起可以把资源放在 <code>assets/</code>，由平台分发；只对新发布生效，页面要准备加载失败时的占位图"]],
+    "脚本与资源":[["脚本","必须是包内外置的 <code>.js</code> 文件，用 <code>&lt;script src&gt;</code> 引入；样式可以写在 HTML 里"],["禁止","内联脚本、<code>onclick</code> 这类行内事件、<code>javascript:</code> 链接、<code>eval</code>、<code>new Function</code>、WebAssembly"],["模块","不要用 <code>type=\"module\"</code> 和 import/export，否则页面显示出来了，但 JS 不执行"],["外部资源","图片、字体、样式表、脚本都不能引用外部域名"],["嵌入","iframe、object 全部禁止"]],
+    "被禁用的能力":[["联网","fetch、XHR、WebSocket、SSE、WebRTC 全部禁用"],["浏览器 API","剪贴板、蓝牙/USB/串口、Web 定位和传感器、Service Worker、SharedWorker、全屏 API、电池/网络信息"],["行为","window.open、prompt、<code>target=_blank</code>、跳到站外或其他小工具、文件下载、表单跳转提交、系统长按菜单"],["文件选择","只能选图片和视频，设置 accept 也没用"],["替代办法","复制改成展示可选中的文字；下载改成存相册；弹出输入框改成页内弹窗；跳页改成单页切换视图"]],
+    "兼容基线":[["Android","最低 Android 8.1 自带的 Chrome/WebView 61"],["iOS","最低 iOS 18.4"],["JS","编译目标 ES2017；更新的 API 先做能力检测"],["CSS","以 Chrome 61 能用的写法为基础，新特性只做局部增强"],["WebGL","只能做纯渲染；不能用 WASM 加速库、外部纹理、SharedArrayBuffer"]],
+    "隐私与内容":[["用户资料","排行榜昵称由平台填充，不能自己采集或保存用户的小红书资料"],["定位","精确坐标不要写进日志或埋点"],["AI","系统提示、用户输入、模型输出都会过内容审核，命中会返回 <code>AI_CONTENT_BLOCKED</code>"],["协议","网页端发布时要勾选《小工具发布安全规范》"],["社区规则","笔记部分沿用小红书社区规范：不能诱导互动，不能导流站外，不能搬运"]]
+  };
+  var tabs=document.getElementById("ruleTabs"),panel=document.getElementById("rulePanel"),keys=Object.keys(RULES);
+  keys.forEach(function(k,i){var b=document.createElement("button");b.setAttribute("role","tab");b.textContent=k;b.addEventListener("click",function(){rt(i)});tabs.appendChild(b)});
+  function rt(i){
+    tabs.querySelectorAll("button").forEach(function(b,j){b.setAttribute("aria-selected",j===i?"true":"false")});
+    panel.innerHTML="<div class='tbl'><table><tbody>"+RULES[keys[i]].map(function(r){return "<tr><td><strong>"+r[0]+"</strong></td><td>"+r[1]+"</td></tr>"}).join("")+"</tbody></table></div>";
+  }
+  rt(0);
+
+  var CHECKS=[
+    {g:"账号与权限",items:[
+      ["小红书账号已登录 redapp CLI","whoami 实测登录成功，权限范围包括 skill_publish",1],
+      ["能打开创作服务平台的 Builder Hub → 小工具","在电脑浏览器里确认一下入口在不在",0],
+      ["（可选）申请 AI 能力加白","只有要用 AI 时才需要；入口要问内测群",0],
+      ["（可选）开通赞赏能力","要变现时再办；流程未公开",0]]},
+    {g:"开发环境",items:[
+      ["Node.js 20 及以上","本机实测 v24.22.1",1],
+      ["redapp CLI 可用","1.0.5，装在 D:\\DevTools\\redapp-cli",1],
+      ["minitool-zip-builder Skill 可用","v1.11.1，已在本机",1],
+      ["一个项目目录","F:\\AI创作\\小红书工具（目前是空的）",1]]},
+    {g:"测试设备",items:[
+      ["一台 Android 手机，小红书升到最新版","赞赏需要 9.53.3，分享需要 9.53",0],
+      ["一台 iOS 18.4 以上的手机","可以借朋友的，但送审前必须测",0],
+      ["一台旧一点的 Android 手机（可选）","用来看低端机性能和降级效果",0]]},
+    {g:"每个工具的素材",items:[
+      ["名称和一句话简介，各 ≤14 字符","",0],
+      ["图标 1:1、封面 3:4","可以让 AI 生成后再裁剪",0],
+      ["一篇配套笔记的内容","工具要挂在笔记上才有人看到",0],
+      ["想清楚需要哪些权限","相册 / 摄像头 / 麦克风 / 位置 / 头像昵称",0]]}
+  ];
+  var KEY="xhs-minitool-checks",saved={};
+  try{saved=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){saved={}}
+  var box=document.getElementById("checks"),cnt=document.getElementById("cnt");
+  CHECKS.forEach(function(grp,gi){
+    var d=document.createElement("div");d.className="cgroup";
+    var h=document.createElement("h3");h.textContent=grp.g;d.appendChild(h);
+    grp.items.forEach(function(it,ii){
+      var id="c"+gi+"_"+ii,lab=document.createElement("label"),inp=document.createElement("input");
+      inp.type="checkbox";inp.id=id;inp.checked=(id in saved)?!!saved[id]:!!it[2];
+      inp.addEventListener("change",function(){saved[id]=inp.checked;try{localStorage.setItem(KEY,JSON.stringify(saved))}catch(e){}count()});
+      lab.htmlFor=id;
+      var sp=document.createElement("span");
+      sp.innerHTML=it[0]+(it[2]?" <span class='state pill p-ok'>已具备</span>":"")+(it[1]?"<span class='hint'>"+it[1]+"</span>":"");
+      lab.appendChild(inp);lab.appendChild(sp);d.appendChild(lab);
+    });
+    box.appendChild(d);
+  });
+  function count(){var all=box.querySelectorAll("input"),n=0;all.forEach(function(i){if(i.checked)n++});cnt.textContent="已完成 "+n+" / "+all.length}
+  count();
+})();
+</script>

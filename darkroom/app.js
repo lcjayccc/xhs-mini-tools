@@ -11,12 +11,14 @@
   var FIX_SECONDS = 4;
   var COUNT_KEY = 'darkroom.count';
 
+  var endFixHold = function () {};
   var state = {
     base: null, aspect: 4 / 3,
     dev: 0, devTime: 0, agiSum: 0, agi: 0, agiTarget: 0,
-    raf: 0, lastTs: 0, gyroOn: false,
-    fix: 0, fixHolding: false, fixTimer: 0,
-    cardUrl: '', tempPath: '', count: 0, busy: false
+    raf: 0, lastTs: 0, gyroOn: false, gyroRound: 0, gyroCbs: [],
+    fix: 0, fixHolding: false, fixTimer: 0, lastFixSec: 0,
+    cardUrl: '', tempPath: '', count: 0, busy: false,
+    lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0
   };
 
   function show(name) {
@@ -28,6 +30,11 @@
   function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
   function pad(n, len) { var s = String(n); while (s.length < len) s = '0' + s; return s; }
 
+  function clearFlash() {
+    var flash = $('light-flash');
+    if (flash) flash.className = 'light-flash';
+  }
+
   /* ---------- 布局：按舞台大小算药盘尺寸，避开右上角宿主按钮 ---------- */
   function fitTrays() {
     ['intro', 'develop', 'fix'].forEach(function (name) {
@@ -38,9 +45,11 @@
       var stage = screen.querySelector(isIntro ? '.intro-tray' : '.stage');
       var tray = screen.querySelector('.tray');
       var paper = screen.querySelector('.tray-paper');
-      var sw = stage.clientWidth - 40, sh = stage.clientHeight - 20;
-      var w = Math.min(sw, (sh - 28) / aspect + 28, isIntro ? 260 : 360);
-      tray.style.width = Math.max(isIntro ? 90 : 140, Math.floor(w)) + 'px';
+      var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 20 : 50);
+      var hw = (sh - 28) / aspect + 28;
+      var w = Math.min(sw, hw, isIntro ? 260 : 360);
+      // 最小宽度不能超过高度允许的宽度，否则极矮屏会裁掉相纸底部
+      tray.style.width = Math.floor(Math.max(Math.min(isIntro ? 90 : 140, hw), w)) + 'px';
       tray.style.maxWidth = 'none';
       paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
     });
@@ -115,7 +124,14 @@
     $('dev-hint').textContent = '晃一晃手机，让药水流过相纸';
     show('develop');
 
-    Bridge.startGyro(onGyro).then(function (ok) {
+    // 每轮一个独立回调：旧轮迟到的失败只会注销它自己，不会误伤当前轮的订阅
+    var round = ++state.gyroRound;
+    var cb = function (f) { onGyro(f); };
+    Bridge.startGyro(cb).then(function (ok) {
+      if (ok) state.gyroCbs.push(cb);
+      // 已经捞出来了才确认启动：立即停掉，免得定影页继续采集
+      if (!state.developing) { stopAllGyro(); return; }
+      if (round !== state.gyroRound) return;
       state.gyroOn = ok;
       if (!ok) $('dev-hint').textContent = '用手指在药盘里来回划，让药水流动';
     });
@@ -180,24 +196,58 @@
     state.developing = false;
     cancelAnimationFrame(state.raf);
     state.raf = 0;
-    if (state.gyroOn) { Bridge.stopGyro(onGyro); state.gyroOn = false; }
+    stopAllGyro();
+    state.gyroOn = false;
+  }
+
+  function stopAllGyro() {
+    state.gyroCbs.forEach(function (cb) { Bridge.stopGyro(cb); });
+    state.gyroCbs = [];
+  }
+
+  function spawnRipple(clientX, clientY, force) {
+    var now = Date.now();
+    if (!force) {
+      if (now - state.lastRippleTs < 120) return;
+      var dx = clientX - state.lastRippleX;
+      var dy = clientY - state.lastRippleY;
+      if (dx * dx + dy * dy < 16 * 16) return;
+    }
+    state.lastRippleTs = now;
+    state.lastRippleX = clientX;
+    state.lastRippleY = clientY;
+    var box = $('tray-ripples');
+    if (!box) return;
+    var rect = box.getBoundingClientRect();
+    var dot = document.createElement('span');
+    dot.className = 'tray-ripple';
+    dot.style.left = Math.round(clientX - rect.left) + 'px';
+    dot.style.top = Math.round(clientY - rect.top) + 'px';
+    box.appendChild(dot);
+    setTimeout(function () {
+      if (dot.parentNode) dot.parentNode.removeChild(dot);
+    }, 680);
   }
 
   function bindTrayRub() {
     var tray = $('tray'), last = null;
     tray.style.touchAction = 'none';
+    // 只跟踪第一根手指：多指各自的坐标混在一起会算出虚高的流动速度
     tray.addEventListener('pointerdown', function (e) {
-      last = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      if (last) return;
+      last = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
+      spawnRipple(e.clientX, e.clientY, true);
       if (tray.setPointerCapture) { try { tray.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ } }
     });
     tray.addEventListener('pointermove', function (e) {
-      if (!last) return;
+      if (!last || e.pointerId !== last.id) return;
       var dt = Math.max(1, e.timeStamp - last.t);
       var dist = Math.sqrt(Math.pow(e.clientX - last.x, 2) + Math.pow(e.clientY - last.y, 2));
       state.agiTarget = Math.max(state.agiTarget, clamp01((dist / dt) * 1000 / 1500));
-      last = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      spawnRipple(e.clientX, e.clientY, false);
+      last = { id: last.id, x: e.clientX, y: e.clientY, t: e.timeStamp };
     });
-    function end() { last = null; }
+    function end(e) { if (last && e.pointerId === last.id) last = null; }
     tray.addEventListener('pointerup', end);
     tray.addEventListener('pointercancel', end);
   }
@@ -211,10 +261,15 @@
     Film.drawFit(state.base, fixCanvas);
     paintDevelop(fixCanvas, state.dev);
     state.fix = 0;
+    state.lastFixSec = 0;
     $('fix-fill').style.width = '0';
-    $('fix-text').textContent = '按住定影';
+    $('fix-text').textContent = '按住定影（4 秒）';
     $('fix-hint').textContent = '按住不放，让定影液把画面固定下来';
+    $('fix-hold').className = 'btn btn-hold';
+    $('lights-on').className = 'btn btn-ghost';
     $('lights-on').hidden = true;
+    $('step-fix').className = 'is-on';
+    $('step-light').className = '';
     show('fix');
   }
 
@@ -229,36 +284,93 @@
       $('fix-fill').style.width = Math.round(state.fix * 100) + '%';
       if (state.fix >= 1) {
         state.fixHolding = false;
-        $('fix-text').textContent = '定影完成';
-        $('fix-hint').textContent = '可以开灯了';
+        holdBy = null;
+        btn.className = 'btn btn-hold is-done';
+        $('fix-text').textContent = '✓ 定影已完成';
+        $('fix-hint').textContent = '画面已固定，可以开灯了';
         $('lights-on').textContent = '开灯';
+        $('lights-on').className = 'btn btn-ghost is-ready';
         $('lights-on').hidden = false;
+        $('step-fix').className = 'is-done';
+        $('step-light').className = 'is-on';
+        fitTrays();
         Bridge.vibrate('light');
         return;
       }
-      requestAnimationFrame(step);
+      var leftSec = Math.max(1, Math.ceil((1 - state.fix) * FIX_SECONDS));
+      if (leftSec !== state.lastFixSec) {
+        state.lastFixSec = leftSec;
+        $('fix-text').textContent = '定影中… 还剩 ' + leftSec + ' 秒';
+      }
+      fixRaf = requestAnimationFrame(step);
     }
-    btn.addEventListener('pointerdown', function (e) {
-      if (state.fix >= 1) return;
-      e.preventDefault();
+    // holdBy 记录是谁在按：pointerId，或键盘 'key'；其他手指的按下和抬起一律忽略
+    var holdBy = null, fixRaf = 0;
+    function startHold(by) {
+      if (state.fix >= 1 || state.fixHolding) return;
+      holdBy = by;
       state.fixHolding = true;
       state.fixTimer = Date.now();
+      state.lastFixSec = 0;
+      btn.className = 'btn btn-hold is-holding';
       $('fix-text').textContent = '定影中…';
-      requestAnimationFrame(step);
+      cancelAnimationFrame(fixRaf);
+      fixRaf = requestAnimationFrame(step);
+    }
+    btn.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      startHold(e.pointerId);
     });
     function release() {
       if (!state.fixHolding) return;
       state.fixHolding = false;
+      holdBy = null;
+      cancelAnimationFrame(fixRaf);
+      btn.className = 'btn btn-hold';
       if (state.fix < 1) {
         $('fix-text').textContent = '继续按住定影';
         $('fix-hint').textContent = '定影还没做完，现在开灯可能会留下斑';
         $('lights-on').textContent = '就这样开灯';
+        $('lights-on').className = 'btn btn-ghost';
         $('lights-on').hidden = false;
+        fitTrays();
       }
     }
-    btn.addEventListener('pointerup', release);
-    btn.addEventListener('pointercancel', release);
-    btn.addEventListener('pointerleave', release);
+    function endPointer(e) { if (e.pointerId === holdBy) release(); }
+    btn.addEventListener('pointerup', endPointer);
+    btn.addEventListener('pointercancel', endPointer);
+    btn.addEventListener('pointerleave', endPointer);
+    // 触摸时手指滑出按钮不会触发 pointerleave，按坐标判断
+    btn.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== holdBy) return;
+      var r = btn.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) release();
+    });
+    // 记下是哪个键开始的，只认这个键的松开
+    function holdKey(e) {
+      if (e.key === ' ' || e.key === 'Spacebar') return 'key:space';
+      if (e.key === 'Enter') return 'key:enter';
+      return null;
+    }
+    btn.addEventListener('keydown', function (e) {
+      var k = holdKey(e);
+      if (!k) return;
+      e.preventDefault();
+      if (!e.repeat) startHold(k);
+    });
+    btn.addEventListener('keyup', function (e) {
+      var k = holdKey(e);
+      if (k && k === holdBy) release();
+    });
+    btn.addEventListener('blur', function () { if (typeof holdBy === 'string') release(); });
+    // 开灯时若还按着，静默结束这次按压，不再改界面文字
+    endFixHold = function () {
+      state.fixHolding = false;
+      holdBy = null;
+      cancelAnimationFrame(fixRaf);
+    };
+    // 切到后台时结束按压，回来不会把后台时间算进定影
+    document.addEventListener('visibilitychange', function () { if (document.hidden) release(); });
     btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
@@ -271,11 +383,29 @@
     return { title: '黑得只剩轮廓', tag: '过显' };
   }
 
+  function renderReportTags(items, isPerfect) {
+    var box = $('result-report');
+    box.innerHTML = '';
+    items.forEach(function (text, idx) {
+      var span = document.createElement('span');
+      span.className = (isPerfect && idx === items.length - 1) ? 'report-tag report-tag-ok' : 'report-tag';
+      span.textContent = text;
+      box.appendChild(span);
+    });
+  }
+
   function lightsOn() {
     if (state.busy) return;
+    endFixHold();
     state.busy = true;
     $('lights-on').disabled = true;
     $('fix-hint').textContent = '开灯…';
+    var flash = $('light-flash');
+    if (flash) {
+      flash.className = 'light-flash';
+      void flash.offsetWidth;
+      flash.className = 'light-flash is-flashing';
+    }
     document.body.className = 'is-lit';
     Bridge.vibrate('heavy');
 
@@ -307,16 +437,28 @@
         $('result-img').src = state.cardUrl;
         $('result-title').textContent = label.title;
 
+        var tags = [
+          '显影 ' + Math.round(state.devTime) + 's · ' + label.tag,
+          '药水流动 ' + Math.round(avgAgi * 100) + '%'
+        ];
         var flaws = [];
         if (params.leak) flaws.push('漏进了一点光');
         if (params.uneven > 0.3) flaws.push('显影不匀');
         if (params.dust) flaws.push('沾了灰');
         if (params.fix < 1) flaws.push('定影斑');
-        $('result-report').textContent = '显影 ' + Math.round(state.devTime) + ' 秒（' + label.tag + '） · 药水流动 ' +
-          Math.round(avgAgi * 100) + '%' + (flaws.length ? ' · ' + flaws.join(' · ') : ' · 一点瑕疵都没有');
+        if (flaws.length) {
+          flaws.forEach(function (f) { tags.push(f); });
+          renderReportTags(tags, false);
+        } else {
+          tags.push('一点瑕疵都没有');
+          renderReportTags(tags, true);
+        }
+
         setStatus('result-status', Bridge.inApp() ? '' : '在小红书里打开，才能存相册和发笔记。');
         show('result');
+        document.querySelector('.result-scroll').scrollTop = 0;
       } catch (e) {
+        clearFlash();
         document.body.className = '';
         $('fix-hint').textContent = '这张没冲出来，再试一次吧';
       }
@@ -361,6 +503,7 @@
   }
 
   function again() {
+    clearFlash();
     document.body.className = '';
     state.base = null; state.cardUrl = ''; state.tempPath = '';
     $('result-img').removeAttribute('src');
@@ -393,3 +536,4 @@
 
   boot();
 }());
+
