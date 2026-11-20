@@ -22,6 +22,14 @@
     return versionPromise;
   }
 
+  var gyroUsers = [], gyroCancelled = [];
+  function releaseGyro(cb) {
+    var i = gyroUsers.indexOf(cb);
+    if (i >= 0) gyroUsers.splice(i, 1);
+    if (has('offGyroscopeChange')) mt().offGyroscopeChange(cb);
+    if (!gyroUsers.length && has('stopGyroscope')) mt().stopGyroscope().catch(function () {});
+  }
+
   function atLeast(min, name) {
     return clientVersion().then(function (v) { return v >= min && has(name); });
   }
@@ -54,27 +62,57 @@
       });
     },
 
+    /* 存一个字符串数组（如已收集的小卡材质）。容器不支持时返回 null，数据损坏时当作空列表 */
+    getList: function (key) {
+      return atLeast(MIN.storage, 'getStorage').then(function (ok) {
+        if (!ok) return null;
+        return mt().getStorage({ key: key }).then(function (r) {
+          if (!r || r.data == null) return [];
+          try {
+            var v = JSON.parse(r.data);
+            return Array.isArray(v) ? v : [];
+          } catch (e) { return []; }
+        }, function () { return null; });
+      });
+    },
+
+    setList: function (key, list) {
+      return atLeast(MIN.storage, 'setStorage').then(function (ok) {
+        if (!ok) return false;
+        return mt().setStorage({ key: key, data: JSON.stringify(list) }).then(function (r) {
+          return !!r && r.errMsg === 'setStorage:ok';
+        }, function () { return false; });
+      });
+    },
+
     vibrate: function (type) {
       atLeast(MIN.vibrate, 'vibrateShort').then(function (ok) {
         if (ok) mt().vibrateShort({ type: type || 'light' }).catch(function () {});
       });
     },
 
-    /* 陀螺仪：回调拿到绕三轴的角速度（rad/s）。返回 Promise<boolean> 表示是否开始采集 */
+    /* 陀螺仪：回调拿到绕三轴的角速度（rad/s）。返回 Promise<boolean> 表示是否开始采集。
+       原生采集是全局的，多个使用者（显影、小卡）共用：最后一个使用者释放时才停采集 */
     startGyro: function (cb) {
       return atLeast(MIN.gyro, 'startGyroscope').then(function (ok) {
+        // 启动还没到这一步就被 stopGyro 取消了：不再登记
+        var c = gyroCancelled.indexOf(cb);
+        if (c >= 0) { gyroCancelled.splice(c, 1); return false; }
         if (!ok || !has('onGyroscopeChange')) return false;
         mt().onGyroscopeChange(cb);
-        return mt().startGyroscope({ interval: 'ui' }).then(function () { return true; }, function () {
-          if (has('offGyroscopeChange')) mt().offGyroscopeChange(cb);
+        if (gyroUsers.indexOf(cb) < 0) gyroUsers.push(cb);
+        return mt().startGyroscope({ interval: 'ui' }).then(function () {
+          return gyroUsers.indexOf(cb) >= 0;
+        }, function () {
+          releaseGyro(cb);
           return false;
         });
       });
     },
 
     stopGyro: function (cb) {
-      if (has('offGyroscopeChange')) mt().offGyroscopeChange(cb);
-      if (has('stopGyroscope')) mt().stopGyroscope().catch(function () {});
+      if (gyroUsers.indexOf(cb) < 0) { if (gyroCancelled.indexOf(cb) < 0) gyroCancelled.push(cb); }
+      releaseGyro(cb);
     },
 
     /* 把 data URI 写成临时文件，存相册和发笔记都用文件路径 */

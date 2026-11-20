@@ -150,6 +150,13 @@
             <div class="result-report" id="result-report"></div>
           </div>
           <div class="result-actions">
+            <button type="button" class="btn btn-card-entry" id="open-card">
+              <svg class="btn-ico" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                <path d="M10 2.5l1.6 4.7 4.9 1.6-4.9 1.6L10 15.1l-1.6-4.7-4.9-1.6 4.9-1.6L10 2.5z" fill="currentColor"/>
+              </svg>
+              <span id="open-card-text">领取暗房小卡</span>
+              <span class="entry-new-dot" id="open-card-dot" hidden aria-hidden="true"></span>
+            </button>
             <div class="result-btn-row">
               <button type="button" class="btn btn-primary" id="save-photo">
                 <svg class="btn-ico" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -164,12 +171,149 @@
                 <span>发一篇笔记</span>
               </button>
             </div>
-            <button type="button" class="btn btn-text" id="again">再冲一张</button>
+            <div class="result-sub-row">
+              <button type="button" class="btn btn-text" id="open-binder-result">暗房卡册 · <span id="binder-count-result">0/6</span></button>
+              <span class="sub-sep" aria-hidden="true">·</span>
+              <button type="button" class="btn btn-text" id="again">再冲一张</button>
+            </div>
             <p class="status" id="result-status" role="status"></p>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- 镭射小卡展示层 -->
+    <div class="card-modal" id="card-modal" role="dialog" aria-modal="true" aria-label="暗房镭射小卡" hidden>
+      <div class="card-modal-bar">
+        <button type="button" class="card-bar-btn" id="close-card" aria-label="返回出片页">
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+            <path d="M12.5 4.5L7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>返回相纸</span>
+        </button>
+        <button type="button" class="card-bar-btn card-bar-binder" id="open-binder-card" aria-label="打开暗房卡册">
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+            <rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <span>卡册 <span id="binder-count-card">0/6</span></span>
+        </button>
+      </div>
+
+      <div class="card-stage" id="card-stage">
+        <div class="card-stage-inner">
+          <div class="holo-scene" id="holo-scene">
+            <div class="holo-aura" id="holo-aura" aria-hidden="true"></div>
+            <div class="holo-tilt" id="holo-tilt">
+              <div class="holo-flipper is-flipped" id="holo-card" tabindex="0" role="button" aria-label="暗房镭射小卡，轻点翻开或翻转，拖动倾斜赏光">
+                <!-- 正面：厚卡纸底板 + 差异化烫箔包边 + 内嵌照片窗 + 收藏卡微缩印刷 -->
+                <div class="holo-face holo-front" id="holo-front" data-material="rainbow">
+                  <div class="holo-trim" aria-hidden="true">
+                    <span class="trim-corner trim-tl"></span>
+                    <span class="trim-corner trim-tr"></span>
+                    <span class="trim-corner trim-bl"></span>
+                    <span class="trim-corner trim-br"></span>
+                  </div>
+                  <div class="holo-stock">
+                    <div class="holo-photo-frame">
+                      <canvas id="card-photo" width="440" height="600"></canvas>
+                    </div>
+                    <div class="holo-front-meta">
+                      <div class="holo-front-left">
+                        <span class="holo-front-lab">DARKROOM LAB · 35MM</span>
+                        <span class="holo-front-no" id="card-front-no">NO.0001</span>
+                      </div>
+                      <div class="holo-front-right">
+                        <span class="holo-front-mat" id="card-front-mat">彩虹</span>
+                        <span class="holo-rarity-mark" id="card-front-rarity"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="holo-fx" id="holo-fx" aria-hidden="true">
+                    <div class="holo-foil"></div>
+                    <div class="holo-glare"></div>
+                    <div class="holo-edge"></div>
+                  </div>
+                </div>
+
+                <!-- 背面：全系列统一暗房图腾 × 实体相纸背印（不剧透材质与稀有度） -->
+                <div class="holo-face holo-back" id="holo-back">
+                  <div class="holo-back-watermark" aria-hidden="true"></div>
+                  <div class="holo-back-shine" id="holo-back-shine" aria-hidden="true"></div>
+                  <div class="holo-back-outer-frame" aria-hidden="true"></div>
+                  <div class="holo-back-inner-frame" aria-hidden="true">
+                    <span class="reg-mark reg-tl"></span>
+                    <span class="reg-mark reg-tr"></span>
+                    <span class="reg-mark reg-bl"></span>
+                    <span class="reg-mark reg-br"></span>
+                  </div>
+                  <div class="holo-back-body">
+                    <div class="holo-back-top">SAFETY FILM · 35MM</div>
+                    <div class="holo-back-emblem" aria-hidden="true">
+                      <span class="emblem-en">DARKROOM LAB</span>
+                      <svg class="emblem-svg" viewBox="0 0 120 120" width="96" height="96">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.45"/>
+                        <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2 3.5" opacity="0.5"/>
+                        <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" stroke-width="1" opacity="0.68"/>
+                        <g stroke="currentColor" stroke-width="0.9" opacity="0.62" fill="none">
+                          <line x1="60" y1="26" x2="82" y2="54"/>
+                          <line x1="89.4" y1="43" x2="71" y2="75"/>
+                          <line x1="89.4" y1="77" x2="54" y2="82"/>
+                          <line x1="60" y1="94" x2="38" y2="66"/>
+                          <line x1="30.6" y1="77" x2="49" y2="45"/>
+                          <line x1="30.6" y1="43" x2="66" y2="38"/>
+                        </g>
+                        <circle cx="60" cy="60" r="11" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.65"/>
+                        <circle cx="60" cy="60" r="3.6" fill="#d84534"/>
+                      </svg>
+                      <span class="emblem-cn">暗房冲印店</span>
+                    </div>
+                    <div class="holo-back-stamp">
+                      <span id="card-back-date">2026.11.19</span>
+                      <span class="stamp-sep">&lt; <span id="card-back-no">No.0001</span> &gt;</span>
+                      <span>C-41 · 35MM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-caption" id="card-caption" aria-live="polite">
+            <span class="card-caption-text" id="card-caption-text"></span>
+            <span class="card-caption-new" id="card-caption-new" hidden>新收入卡册</span>
+          </div>
+          <p class="card-tip" id="card-tip">轻点翻开，看看冲出了什么材质</p>
+        </div>
+      </div>
+
+      <div class="card-modal-actions">
+        <button type="button" class="btn btn-primary is-pending" id="save-card" disabled>存这张小卡</button>
+      </div>
+    </div>
+
+    <!-- 独立暗房卡册（6格透明活页插袋） -->
+    <div class="binder-modal" id="binder-modal" role="dialog" aria-modal="true" aria-label="暗房卡册" hidden>
+      <div class="binder-bar">
+        <button type="button" class="card-bar-btn" id="close-binder" aria-label="关闭卡册">
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+            <path d="M5.5 5.5l9 9m0-9l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>关闭</span>
+        </button>
+        <div class="binder-head-meta">
+          <span class="binder-title">暗房卡册</span>
+          <span class="binder-count" id="card-collect-count">已收集 0/6</span>
+        </div>
+      </div>
+      <div class="binder-scroll">
+        <div class="binder-sheet">
+          <div class="binder-grid" id="card-collect-grid"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <canvas id="work-canvas" class="visually-hidden" aria-hidden="true"></canvas>
