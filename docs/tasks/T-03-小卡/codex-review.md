@@ -3,7 +3,7 @@
 ## 背景
 
 - 仓库 `F:\AI创作\小红书工具`，先读根目录 `AGENTS.md`（平台硬约束和协作流程）和 `docs/CURRENT.md`。
-- 基线是 tag `darkroom/v1.1.0`（提交 `605bc29`）。本次是工作区里未提交的 diff：`git diff darkroom/v1.1.0 -- darkroom/`，涉及 `index.html`、`style.css`、`app.js`、`bridge.js`、`film.js`。
+- 基线是 tag `darkroom/v1.1.0`（提交 `82c8895`）。本次是工作区里未提交的 diff：`git diff darkroom/v1.1.0 -- darkroom/`，涉及 `index.html`、`style.css`、`app.js`、`bridge.js`、`film.js`。
 - 功能说明：出片后可「领取暗房小卡」。材质由冲洗结果决定（规则见 `docs/tasks/T-03-小卡/映射规则.md`）；先展示统一卡背，点一下按稀有度分级揭晓；正面可拖动倾斜、可翻面；有 2×3 的「暗房卡册」收集图鉴；「存这张小卡」把卡合成为一张 1080×1440 的晒卡图存进相册；手机转动通过容器陀螺仪带动小卡倾斜。
 - 作者分工：界面（HTML / CSS / 小卡交互 JS）是 Gemini 写的；Claude 写了 `pickMaterial`、`collectMaterial`、`bridge.js` 的 `getList` / `setList`、`film.js` 的 `drawCover` 和 `composePhotocard`、`app.js` 的 `startCardGyro` / `stopCardGyro` / `ensureCardShot` / `saveCard`。
 - 容器事实（小工具在线文档，已核实）：没有加速度计；陀螺仪回调是角速度（rad/s），`offGyroscopeChange(cb)` 按函数引用注销，`stopGyroscope` 停的是全局采集；页面进后台时采集自动暂停。

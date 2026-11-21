@@ -8,15 +8,15 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
     body {
-      background: #0f0706; color: #f0dfd5;
+      background: #0e0706; color: #f5e8e0;
       font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
       overflow: hidden;
     }
     .app { position: relative; height: 100%; display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column; }
-    .intro-title { font-family: "Songti SC", "STSong", "SimSun", serif; font-size: 30px; letter-spacing: 5px; color: #f6e9e0; }
-    .intro-sub { margin-top: 8px; font-size: 13px; line-height: 1.65; color: #b9978a; }
+    .intro-title { font-family: "Songti SC", "STSong", "SimSun", serif; font-size: 28px; line-height: 1.25; letter-spacing: 3px; color: #f5e8e0; font-weight: 600; }
+    .intro-sub { margin-top: 8px; font-size: 13px; line-height: 1.6; color: #c8aba0; }
   </style>
   <link rel="stylesheet" href="./style.css" />
 </head>
@@ -40,10 +40,8 @@
 
       <div class="intro-tray" aria-hidden="true">
         <div class="tray tray-static">
-          <div class="tray-rim"></div>
           <div class="tray-paper">
-            <span class="tray-paper-tag">SAMPLE · 00</span>
-            <canvas id="sample-preview" width="300" height="400"></canvas>
+            <canvas id="sample-preview" width="360" height="480"></canvas>
           </div>
           <div class="tray-liquid"></div>
         </div>
@@ -74,17 +72,19 @@
         </ol>
       </header>
       <div class="stage">
-        <span class="tray-badge" aria-hidden="true">DEV · 显影液</span>
         <div class="tray" id="tray">
-          <div class="tray-rim"></div>
           <div class="tray-paper" id="tray-paper"><canvas id="develop-canvas"></canvas></div>
+          <div class="tray-red" aria-hidden="true"></div>
           <div class="tray-liquid" id="tray-liquid"></div>
           <div class="tray-ripples" id="tray-ripples" aria-hidden="true"></div>
-          <div class="tray-red" aria-hidden="true"></div>
+          <div class="tray-guide" id="tray-guide" aria-hidden="true">
+            <span class="tray-guide-ring"></span>
+            <span class="tray-guide-dot"></span>
+          </div>
         </div>
       </div>
       <div class="panel">
-        <div class="readout-box">
+        <div class="readout-box" id="dev-readout">
           <div class="readout">
             <div class="readout-clock">
               <span class="clock-dot" aria-hidden="true"></span>
@@ -97,7 +97,7 @@
           </div>
         </div>
         <p class="hint" id="dev-hint">晃一晃手机，让药水流过相纸</p>
-        <button type="button" class="btn btn-primary" id="pull-out" disabled>捞出来</button>
+        <button type="button" class="btn btn-ghost" id="pull-out" disabled>捞出来</button>
       </div>
     </section>
 
@@ -111,12 +111,10 @@
         </ol>
       </header>
       <div class="stage">
-        <span class="tray-badge" aria-hidden="true">FIX · 定影液</span>
         <div class="tray tray-fix">
-          <div class="tray-rim"></div>
           <div class="tray-paper"><canvas id="fix-canvas"></canvas></div>
-          <div class="tray-liquid tray-liquid-calm"></div>
           <div class="tray-red" aria-hidden="true"></div>
+          <div class="tray-liquid tray-liquid-calm"></div>
         </div>
       </div>
       <div class="panel panel-fix">
@@ -145,18 +143,11 @@
             <div class="result-card"><img id="result-img" alt="冲洗出来的照片" /></div>
           </div>
           <div class="result-meta">
-            <p class="result-kicker">冲印质检单</p>
+            <p class="result-kicker">冲印回执</p>
             <p class="result-title visually-hidden" id="result-title">刚刚好的一张</p>
             <div class="result-report" id="result-report"></div>
           </div>
           <div class="result-actions">
-            <button type="button" class="btn btn-card-entry" id="open-card">
-              <svg class="btn-ico" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                <path d="M10 2.5l1.6 4.7 4.9 1.6-4.9 1.6L10 15.1l-1.6-4.7-4.9-1.6 4.9-1.6L10 2.5z" fill="currentColor"/>
-              </svg>
-              <span id="open-card-text">领取暗房小卡</span>
-              <span class="entry-new-dot" id="open-card-dot" hidden aria-hidden="true"></span>
-            </button>
             <div class="result-btn-row">
               <button type="button" class="btn btn-primary" id="save-photo">
                 <svg class="btn-ico" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -171,6 +162,13 @@
                 <span>发一篇笔记</span>
               </button>
             </div>
+            <button type="button" class="btn btn-card-entry" id="open-card">
+              <svg class="btn-ico" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+                <path d="M10 2.5l1.6 4.7 4.9 1.6-4.9 1.6L10 15.1l-1.6-4.7-4.9-1.6 4.9-1.6L10 2.5z" fill="currentColor"/>
+              </svg>
+              <span id="open-card-text">领取暗房小卡</span>
+              <span class="entry-new-dot" id="open-card-dot" hidden aria-hidden="true"></span>
+            </button>
             <div class="result-sub-row">
               <button type="button" class="btn btn-text" id="open-binder-result">暗房卡册 · <span id="binder-count-result">0/6</span></button>
               <span class="sub-sep" aria-hidden="true">·</span>
@@ -222,7 +220,7 @@
                     </div>
                     <div class="holo-front-meta">
                       <div class="holo-front-left">
-                        <span class="holo-front-lab">DARKROOM LAB · 35MM</span>
+                        <span class="holo-front-lab">DARKROOM · 35MM</span>
                         <span class="holo-front-no" id="card-front-no">NO.0001</span>
                       </div>
                       <div class="holo-front-right">
@@ -273,7 +271,7 @@
                     <div class="holo-back-stamp">
                       <span id="card-back-date">2026.11.19</span>
                       <span class="stamp-sep">&lt; <span id="card-back-no">No.0001</span> &gt;</span>
-                      <span>C-41 · 35MM</span>
+                      <span>C-41</span>
                     </div>
                   </div>
                 </div>
@@ -322,4 +320,3 @@
   <script defer src="./app.js"></script>
 </body>
 </html>
-

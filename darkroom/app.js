@@ -25,6 +25,7 @@
   };
 
   var prismTexUrl = '';
+  var portraitSampleCache = null;
 
   var endFixHold = function () {};
   var state = {
@@ -35,7 +36,8 @@
     cardUrl: '', tempPath: '', count: 0, busy: false,
     material: '', collected: [], photo: null, round: 0,
     shotDate: '', isNewMaterial: false,
-    lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0
+    lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0,
+    lastSloshRippleTs: 0
   };
 
   var cardState = {
@@ -46,7 +48,8 @@
     rx: 0, ry: 0, vx: 0, vy: 0,
     tx: 0, ty: 0, dragging: false, lastInputTs: 0,
     sweepStart: 0, sweeping: false,
-    slowFrames: 0, lowPerf: false
+    slowFrames: 0, lowPerf: false,
+    thumbs: {}
   };
 
   function show(name) {
@@ -68,11 +71,367 @@
     if (flash) flash.className = 'light-flash';
   }
 
-  /* ---------- 棱镜碎冰多面体纹理（运行期生成一次并缓存） ---------- */
+  /* ---------- 离线人像示例底片（黄金时刻逆光海边人像，兼顾高光/中间调/深暗部以展现各冲洗与卡面效果） ---------- */
+  function makePortraitSample() {
+    if (portraitSampleCache) return portraitSampleCache;
+    var w = 600, h = 800;
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+
+    // 1. 黄金时刻暖色天海背景（丰富渐变层次）
+    var sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0.0, '#1e2842');
+    sky.addColorStop(0.28, '#4a3d58');
+    sky.addColorStop(0.50, '#b96958');
+    sky.addColorStop(0.64, '#f0ae72');
+    sky.addColorStop(0.76, '#f8d59a');
+    sky.addColorStop(1.0, '#2a222b');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. 逆光太阳光晕（营造胶片晕光与高光测试区）
+    var sun = ctx.createRadialGradient(430, 290, 12, 430, 290, 320);
+    sun.addColorStop(0.0, 'rgba(255, 250, 232, 0.92)');
+    sun.addColorStop(0.22, 'rgba(255, 214, 152, 0.62)');
+    sun.addColorStop(0.55, 'rgba(232, 124, 92, 0.22)');
+    sun.addColorStop(1.0, 'rgba(232, 124, 92, 0)');
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, w, h);
+
+    // 3. 远景海面与波光（中间调与水平层次）
+    var sea = ctx.createLinearGradient(0, 495, 0, h);
+    sea.addColorStop(0.0, '#6a4c56');
+    sea.addColorStop(0.32, '#3d3345');
+    sea.addColorStop(1.0, '#1a1721');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, 495, w, h - 495);
+
+    // 远山剪影
+    ctx.fillStyle = 'rgba(42, 34, 52, 0.55)';
+    ctx.beginPath();
+    ctx.moveTo(0, 498);
+    ctx.quadraticCurveTo(95, 456, 210, 488);
+    ctx.quadraticCurveTo(360, 446, 510, 484);
+    ctx.quadraticCurveTo(565, 470, w, 482);
+    ctx.lineTo(w, 502);
+    ctx.lineTo(0, 502);
+    ctx.closePath();
+    ctx.fill();
+
+    // 海面碎金反光
+    var i, rx, ry, rw;
+    for (i = 0; i < 28; i += 1) {
+      ry = 505 + i * 7.5;
+      rw = Math.max(16, 130 - i * 3.4);
+      rx = 415 - rw * 0.5 + Math.sin(i * 1.9) * 18;
+      ctx.fillStyle = 'rgba(255, 224, 168, ' + (0.28 - i * 0.008).toFixed(3) + ')';
+      ctx.fillRect(rx, ry, rw, 2.2);
+    }
+
+    // 柔和散景光斑（体现闪粉/棱镜的高光层次）
+    var bokeh = [
+      [96, 152, 34, 0.14], [156, 226, 22, 0.18], [492, 174, 42, 0.16],
+      [524, 348, 28, 0.15], [72, 368, 26, 0.12], [462, 430, 18, 0.20]
+    ];
+    for (i = 0; i < bokeh.length; i += 1) {
+      var b = bokeh[i];
+      var bg = ctx.createRadialGradient(b[0], b[1], 2, b[0], b[1], b[2]);
+      bg.addColorStop(0, 'rgba(255, 240, 210, ' + b[3] + ')');
+      bg.addColorStop(0.75, 'rgba(255, 218, 172, ' + (b[3] * 0.5).toFixed(3) + ')');
+      bg.addColorStop(1, 'rgba(255, 218, 172, 0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.arc(b[0], b[1], b[2], 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4. 人物后发与随风飘动发丝（深栗色暗部）
+    ctx.save();
+    ctx.fillStyle = '#1b1214';
+    ctx.beginPath();
+    ctx.moveTo(192, 278);
+    ctx.bezierCurveTo(165, 360, 148, 468, 176, 560);
+    ctx.lineTo(418, 558);
+    ctx.bezierCurveTo(440, 456, 422, 348, 390, 268);
+    ctx.bezierCurveTo(366, 186, 228, 180, 192, 278);
+    ctx.closePath();
+    ctx.fill();
+
+    // 右侧逆光金色发丝边缘光
+    ctx.strokeStyle = 'rgba(255, 216, 154, 0.72)';
+    ctx.lineWidth = 3.2;
+    ctx.beginPath();
+    ctx.moveTo(378, 232);
+    ctx.bezierCurveTo(418, 294, 434, 376, 422, 452);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 196, 134, 0.42)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(392, 268);
+    ctx.bezierCurveTo(438, 336, 456, 404, 444, 474);
+    ctx.stroke();
+
+    // 5. 肩颈与针织开衫（奶白色中间调 + 深色内搭领口）
+    // 颈部与锁骨光影
+    var neckGrad = ctx.createLinearGradient(255, 385, 335, 510);
+    neckGrad.addColorStop(0, '#d99e82');
+    neckGrad.addColorStop(0.5, '#efc1a4');
+    neckGrad.addColorStop(1, '#c88c72');
+    ctx.fillStyle = neckGrad;
+    ctx.beginPath();
+    ctx.moveTo(256, 396);
+    ctx.lineTo(330, 396);
+    ctx.lineTo(344, 502);
+    ctx.lineTo(240, 502);
+    ctx.closePath();
+    ctx.fill();
+
+    // 下巴在颈部的柔和投影
+    ctx.fillStyle = 'rgba(92, 46, 38, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(294, 418, 36, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 奶白针织开衫主体
+    var coatGrad = ctx.createLinearGradient(110, 500, 480, 800);
+    coatGrad.addColorStop(0, '#c8b8ab');
+    coatGrad.addColorStop(0.45, '#f2e8dc');
+    coatGrad.addColorStop(0.85, '#fff4e4');
+    coatGrad.addColorStop(1, '#d8c5b4');
+    ctx.fillStyle = coatGrad;
+    ctx.beginPath();
+    ctx.moveTo(108, 800);
+    ctx.bezierCurveTo(118, 646, 152, 536, 232, 496);
+    ctx.lineTo(362, 496);
+    ctx.bezierCurveTo(442, 534, 480, 644, 494, 800);
+    ctx.closePath();
+    ctx.fill();
+
+    // 深蓝灰水手/衬衫翻领（形成强对比暗部）
+    ctx.fillStyle = '#242b3d';
+    ctx.beginPath();
+    ctx.moveTo(232, 496);
+    ctx.lineTo(294, 592);
+    ctx.lineTo(362, 496);
+    ctx.lineTo(334, 490);
+    ctx.lineTo(294, 550);
+    ctx.lineTo(258, 490);
+    ctx.closePath();
+    ctx.fill();
+
+    // 领口白边细线
+    ctx.strokeStyle = 'rgba(255, 245, 234, 0.72)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(242, 498);
+    ctx.lineTo(294, 580);
+    ctx.lineTo(352, 498);
+    ctx.stroke();
+
+    // 6. 面部轮廓与柔和五官（胶片日系少女四分之三侧颜）
+    var faceGrad = ctx.createRadialGradient(318, 304, 18, 290, 320, 128);
+    faceGrad.addColorStop(0, '#fde2cd');
+    faceGrad.addColorStop(0.55, '#f1c2a5');
+    faceGrad.addColorStop(1, '#ce8e74');
+    ctx.fillStyle = faceGrad;
+    ctx.beginPath();
+    ctx.moveTo(222, 286);
+    ctx.bezierCurveTo(220, 368, 250, 418, 296, 422);
+    ctx.bezierCurveTo(342, 418, 368, 366, 368, 286);
+    ctx.bezierCurveTo(368, 224, 336, 198, 294, 198);
+    ctx.bezierCurveTo(252, 198, 222, 226, 222, 286);
+    ctx.closePath();
+    ctx.fill();
+
+    // 面部右侧暖金轮廓光
+    ctx.strokeStyle = 'rgba(255, 242, 214, 0.78)';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(358, 254);
+    ctx.bezierCurveTo(370, 316, 356, 376, 326, 408);
+    ctx.stroke();
+
+    // 柔和腮红
+    var blushL = ctx.createRadialGradient(252, 342, 4, 252, 342, 28);
+    blushL.addColorStop(0, 'rgba(228, 122, 108, 0.34)');
+    blushL.addColorStop(1, 'rgba(228, 122, 108, 0)');
+    ctx.fillStyle = blushL;
+    ctx.beginPath();
+    ctx.arc(252, 342, 28, 0, Math.PI * 2);
+    ctx.fill();
+
+    var blushR = ctx.createRadialGradient(334, 340, 4, 334, 340, 26);
+    blushR.addColorStop(0, 'rgba(232, 128, 110, 0.30)');
+    blushR.addColorStop(1, 'rgba(232, 128, 110, 0)');
+    ctx.fillStyle = blushR;
+    ctx.beginPath();
+    ctx.arc(334, 340, 26, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 眉毛
+    ctx.strokeStyle = '#3a2420';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(240, 294);
+    ctx.quadraticCurveTo(260, 287, 276, 293);
+    ctx.moveTo(312, 292);
+    ctx.quadraticCurveTo(330, 286, 346, 293);
+    ctx.stroke();
+
+    // 双眼（清澈目光与高光点）
+    function drawEye(cx, cy) {
+      ctx.fillStyle = '#fff9f4';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 15, 8.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2d1c1b';
+      ctx.beginPath();
+      ctx.arc(cx + 1.5, cy + 0.5, 7.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#5c3c36';
+      ctx.beginPath();
+      ctx.arc(cx + 1.5, cy + 2.2, 4.0, 0, Math.PI * 2);
+      ctx.fill();
+      // 眼神高光
+      ctx.fillStyle = '#fff7ea';
+      ctx.beginPath();
+      ctx.arc(cx + 4.0, cy - 2.0, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      // 上睫毛线
+      ctx.strokeStyle = '#231515';
+      ctx.lineWidth = 2.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 16, cy + 1);
+      ctx.quadraticCurveTo(cx, cy - 11, cx + 16, cy + 1);
+      ctx.stroke();
+    }
+    drawEye(260, 316);
+    drawEye(328, 315);
+
+    // 鼻影与微笑唇色
+    ctx.strokeStyle = 'rgba(148, 86, 68, 0.42)';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(295, 326);
+    ctx.quadraticCurveTo(298, 344, 292, 350);
+    ctx.stroke();
+
+    ctx.fillStyle = '#cc6f64';
+    ctx.beginPath();
+    ctx.moveTo(278, 376);
+    ctx.quadraticCurveTo(294, 370, 312, 376);
+    ctx.quadraticCurveTo(295, 389, 278, 376);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 224, 210, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(295, 379, 6, 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 7. 空气刘海与鬓角发丝（覆盖额头，立体层次）
+    var hairGrad = ctx.createLinearGradient(200, 175, 385, 340);
+    hairGrad.addColorStop(0, '#181012');
+    hairGrad.addColorStop(0.55, '#2b1b1c');
+    hairGrad.addColorStop(1, '#4c2c24');
+    ctx.fillStyle = hairGrad;
+    ctx.beginPath();
+    ctx.moveTo(202, 298);
+    ctx.bezierCurveTo(194, 218, 240, 168, 298, 170);
+    ctx.bezierCurveTo(356, 172, 396, 222, 388, 304);
+    ctx.bezierCurveTo(378, 260, 362, 242, 346, 276);
+    ctx.bezierCurveTo(334, 238, 314, 232, 302, 272);
+    ctx.bezierCurveTo(286, 236, 262, 238, 250, 276);
+    ctx.bezierCurveTo(234, 246, 214, 264, 202, 298);
+    ctx.closePath();
+    ctx.fill();
+
+    // 两侧修饰脸颊的碎发
+    ctx.fillStyle = '#1e1416';
+    ctx.beginPath();
+    ctx.moveTo(212, 266);
+    ctx.bezierCurveTo(202, 336, 208, 404, 226, 444);
+    ctx.bezierCurveTo(218, 390, 222, 332, 228, 274);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(376, 268);
+    ctx.bezierCurveTo(384, 336, 376, 402, 358, 446);
+    ctx.bezierCurveTo(364, 390, 362, 334, 360, 276);
+    ctx.closePath();
+    ctx.fill();
+
+    // 8. 复古 35mm 旁轴胶片机与双手（呼应暗房主题，增加精密金属/皮质质感）
+    // 相机机身
+    ctx.fillStyle = '#1a1a1e';
+    ctx.fillRect(218, 578, 164, 108);
+    // 银色机顶
+    var topPlate = ctx.createLinearGradient(218, 578, 382, 608);
+    topPlate.addColorStop(0, '#c8cfd6');
+    topPlate.addColorStop(0.5, '#f2f5f8');
+    topPlate.addColorStop(1, '#9ca4ae');
+    ctx.fillStyle = topPlate;
+    ctx.fillRect(218, 578, 164, 28);
+    // 快门旋钮与取景窗
+    ctx.fillStyle = '#aeb6c0';
+    ctx.fillRect(236, 568, 22, 10);
+    ctx.fillRect(344, 570, 18, 8);
+    ctx.fillStyle = '#151922';
+    ctx.fillRect(320, 584, 26, 15);
+    ctx.fillStyle = 'rgba(130, 200, 255, 0.35)';
+    ctx.fillRect(323, 586, 10, 6);
+
+    // 镜头外圈（金属银 + 镀膜玻璃）
+    ctx.fillStyle = '#d4dbe2';
+    ctx.beginPath();
+    ctx.arc(298, 636, 40, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#202228';
+    ctx.beginPath();
+    ctx.arc(298, 636, 33, 0, Math.PI * 2);
+    ctx.fill();
+    var lensGrad = ctx.createRadialGradient(290, 628, 4, 298, 636, 24);
+    lensGrad.addColorStop(0, '#5a7ea8');
+    lensGrad.addColorStop(0.5, '#1d273c');
+    lensGrad.addColorStop(1, '#0c0f18');
+    ctx.fillStyle = lensGrad;
+    ctx.beginPath();
+    ctx.arc(298, 636, 23, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 245, 224, 0.72)';
+    ctx.beginPath();
+    ctx.ellipse(290, 627, 6, 3.2, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 双手托举相机
+    ctx.fillStyle = '#ebb99c';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(190, 598, 34, 72, 14) : ctx.fillRect(190, 598, 34, 72);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(376, 598, 34, 72, 14) : ctx.fillRect(376, 598, 34, 72);
+    ctx.fill();
+
+    // 9. 轻柔的画面暖色晕光收尾
+    var flare = ctx.createRadialGradient(460, 250, 10, 460, 250, 440);
+    flare.addColorStop(0, 'rgba(255, 232, 184, 0.24)');
+    flare.addColorStop(0.5, 'rgba(255, 178, 126, 0.08)');
+    flare.addColorStop(1, 'rgba(255, 178, 126, 0)');
+    ctx.fillStyle = flare;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.restore();
+    portraitSampleCache = c;
+    return c;
+  }
+
+  /* ---------- 棱镜碎冰多面体纹理（中心主体避让：中心柔和通透，四周晶面锐利） ---------- */
   function getPrismTexture() {
     if (prismTexUrl) return prismTexUrl;
     try {
-      var size = 180, cols = 6, rows = 6;
+      var size = 240, cols = 8, rows = 8;
       var c = document.createElement('canvas');
       c.width = size; c.height = size;
       var ctx = c.getContext('2d');
@@ -86,13 +445,20 @@
       for (r = 0; r <= rows; r += 1) {
         pts[r] = [];
         for (col = 0; col <= cols; col += 1) {
-          var jx = (col === 0 || col === cols) ? 0 : (rand() - 0.5) * stepX * 0.72;
-          var jy = (r === 0 || r === rows) ? 0 : (rand() - 0.5) * stepY * 0.72;
+          var jx = (col === 0 || col === cols) ? 0 : (rand() - 0.5) * stepX * 0.68;
+          var jy = (r === 0 || r === rows) ? 0 : (rand() - 0.5) * stepY * 0.68;
           pts[r][col] = { x: col * stepX + jx, y: r * stepY + jy };
         }
       }
       function drawTri(a, b, d) {
-        var lum = Math.floor(35 + rand() * 205);
+        var cx = (a.x + b.x + d.x) / 3;
+        var cy = (a.y + b.y + d.y) / 3;
+        // 距离中心越近，晶面明暗对比越柔和，避免遮挡人像面部主体
+        var dx = (cx - size * 0.5) / (size * 0.5);
+        var dy = (cy - size * 0.45) / (size * 0.5);
+        var dist = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+        var edgeWeight = 0.22 + 0.78 * Math.pow(dist, 1.35);
+        var lum = Math.floor(24 + rand() * 215 * edgeWeight);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -100,8 +466,8 @@
         ctx.closePath();
         ctx.fillStyle = 'rgb(' + lum + ',' + lum + ',' + lum + ')';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-        ctx.lineWidth = 0.6;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.06 + 0.20 * edgeWeight).toFixed(2) + ')';
+        ctx.lineWidth = 0.5;
         ctx.stroke();
       }
       for (r = 0; r < rows; r += 1) {
@@ -134,10 +500,9 @@
       var stage = screen.querySelector(isIntro ? '.intro-tray' : '.stage');
       var tray = screen.querySelector('.tray');
       var paper = screen.querySelector('.tray-paper');
-      var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 20 : 50);
-      var hw = (sh - 28) / aspect + 28;
-      var w = Math.min(sw, hw, isIntro ? 260 : 360);
-      // 最小宽度不能超过高度允许的宽度，否则极矮屏会裁掉相纸底部
+      var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 16 : 24);
+      var hw = (sh - 24) / aspect + 24;
+      var w = Math.min(sw, hw, isIntro ? 264 : 360);
       tray.style.width = Math.floor(Math.max(Math.min(isIntro ? 90 : 140, hw), w)) + 'px';
       tray.style.maxWidth = 'none';
       paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
@@ -183,8 +548,8 @@
     setTimeout(function () {
       try {
         var small = document.createElement('canvas');
-        small.width = 300; small.height = 400;
-        Film.drawFit(Film.makeSample(), small);
+        small.width = 360; small.height = 480;
+        Film.drawFit(makePortraitSample(), small);
         var shot = Film.develop(small, { dev: 1, uneven: 0, fix: 1, leak: true, dust: true });
         Film.drawFit(shot, preview);
       } catch (e) { /* 示例图失败不影响使用 */ }
@@ -207,10 +572,10 @@
 
     $('use-sample').addEventListener('click', function () {
       if (state.busy) return;
-      startDevelop(Film.makeSample());
+      startDevelop(makePortraitSample());
     });
     $('use-sample').disabled = false;
-    setStatus('intro-status', '红灯亮了。暗房里看不清颜色，开灯才知道冲成什么样。');
+    setStatus('intro-status', '红灯亮了，开灯前看不清颜色。');
   }
 
   /* ---------- 显影 ---------- */
@@ -282,15 +647,59 @@
     state.agiSum += state.agi * dt;
 
     paintDevelop($('develop-canvas'), state.dev);
+
+    // 增强液体流动可见度：更明显的斜向波浪位移、轻微缩放与动态反光强度
     var liquid = $('tray-liquid');
     var tt = ts / 1000, amp = state.agi;
+    var tx = Math.sin(tt * 5.8) * (2.5 + amp * 13.5);
+    var ty = Math.cos(tt * 4.4) * (1.8 + amp * 9.5);
+    var sc = 1 + amp * 0.06;
+    var rot = Math.sin(tt * 3.2) * amp * 3.5;
     liquid.style.transform = liquid.style.webkitTransform =
-      'translate(' + (Math.sin(tt * 6) * amp * 7).toFixed(2) + '%,' + (Math.cos(tt * 4.3) * amp * 5).toFixed(2) + '%)';
-    $('dev-meter').style.width = Math.round(state.agi * 100) + '%';
+      'translate(' + tx.toFixed(2) + '%,' + ty.toFixed(2) + '%) scale(' + sc.toFixed(3) + ') rotate(' + rot.toFixed(2) + 'deg)';
+    liquid.style.opacity = (0.36 + amp * 0.62).toFixed(2);
+
+    // 晃动强烈时在药盘内自动激起轻柔波纹，让晃手机也有直观水感反馈
+    if (amp > 0.45 && !isReducedMotion()) {
+      var now = Date.now();
+      if (now - state.lastSloshRippleTs > 320) {
+        state.lastSloshRippleTs = now;
+        var trayEl = $('tray');
+        if (trayEl) {
+          var rect = trayEl.getBoundingClientRect();
+          var rx = rect.left + rect.width * (0.24 + Math.random() * 0.52);
+          var ry = rect.top + rect.height * (0.24 + Math.random() * 0.52);
+          spawnRipple(rx, ry, true);
+        }
+      }
+    }
+
+    // 2 秒零晃动时的轻量手势微提示
+    var guide = $('tray-guide');
+    if (guide) {
+      var shouldGuide = state.devTime > 1.8 && state.agiSum < 0.08 && amp < 0.12;
+      guide.className = shouldGuide ? 'tray-guide is-guiding' : 'tray-guide';
+    }
+
+    // 用 GPU 合成 transform: scaleX 替代 width 避免重排
+    var meter = $('dev-meter');
+    var sx = 'scaleX(' + clamp01(amp).toFixed(3) + ')';
+    meter.style.webkitTransform = sx;
+    meter.style.transform = sx;
+
+    var readoutBox = $('dev-readout');
+    if (readoutBox) {
+      readoutBox.className = amp > 0.18 ? 'readout-box is-flowing' : 'readout-box';
+    }
+
     var sec = Math.floor(state.devTime);
     $('dev-time').textContent = pad(Math.floor(sec / 60), 2) + ':' + pad(sec % 60, 2);
 
-    if (state.dev > 0.25) $('pull-out').disabled = false;
+    var pullBtn = $('pull-out');
+    if (state.dev > 0.25) pullBtn.disabled = false;
+    // 画面差不多成形时「捞出来」才升为主按钮，之前不催用户
+    var pullCls = state.dev > 0.8 ? 'btn btn-primary' : 'btn btn-ghost';
+    if (pullBtn.className !== pullCls) pullBtn.className = pullCls;
     var hint = $('dev-hint');
     if (state.dev > 1.35) hint.textContent = '再不捞，就只剩轮廓了';
     else if (state.dev > 0.8) hint.textContent = '画面差不多成形了，你觉得呢？';
@@ -315,10 +724,10 @@
   function spawnRipple(clientX, clientY, force) {
     var now = Date.now();
     if (!force) {
-      if (now - state.lastRippleTs < 120) return;
+      if (now - state.lastRippleTs < 100) return;
       var dx = clientX - state.lastRippleX;
       var dy = clientY - state.lastRippleY;
-      if (dx * dx + dy * dy < 16 * 16) return;
+      if (dx * dx + dy * dy < 14 * 14) return;
     }
     state.lastRippleTs = now;
     state.lastRippleX = clientX;
@@ -333,7 +742,7 @@
     box.appendChild(dot);
     setTimeout(function () {
       if (dot.parentNode) dot.parentNode.removeChild(dot);
-    }, 680);
+    }, 740);
   }
 
   function bindTrayRub() {
@@ -818,16 +1227,38 @@
       pocket.className = 'binder-pocket';
 
       if (has) {
+        var isCurrent = !!(revealedNow && state.material && key === state.material);
         var card = document.createElement('div');
-        card.className = 'pocket-card';
+        card.className = isCurrent ? 'pocket-card is-inspectable' : 'pocket-card';
         card.setAttribute('data-material', key);
+
+        if (cardState.thumbs[key]) {
+          var thumb = document.createElement('div');
+          thumb.className = 'pocket-thumb';
+          thumb.style.backgroundImage = 'url("' + cardState.thumbs[key] + '")';
+          card.appendChild(thumb);
+        }
+
+        if (isCurrent) {
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
+          card.setAttribute('aria-label', '查看本次冲出的' + meta.name + '小卡');
+          card.addEventListener('click', function () {
+            if (cardState.open) {
+              closeBinder();
+            } else {
+              closeBinder(true);
+              openCard();
+            }
+          });
+        }
 
         var head = document.createElement('div');
         head.className = 'pocket-head';
         var num = document.createElement('span');
         num.textContent = pad(idx + 1, 2) + ' / ' + meta.code;
         head.appendChild(num);
-        if (revealedNow && state.material && key === state.material) {
+        if (isCurrent) {
           var badge = document.createElement('span');
           badge.className = 'pocket-now';
           badge.textContent = '本次';
@@ -913,6 +1344,16 @@
     cardState.revealedRound = state.round;
     cardState.flipped = false;
 
+    // 内存缓存本次冲出的缩略图供卡册展示（不写 localStorage）
+    if (state.photo) {
+      try {
+        var tc = document.createElement('canvas');
+        tc.width = 160; tc.height = 220;
+        Film.drawCover(state.photo, tc);
+        cardState.thumbs[mat] = tc.toDataURL('image/jpeg', 0.72);
+      } catch (err) { /* 忽略 */ }
+    }
+
     var card = $('holo-card');
     if (card) card.className = 'holo-flipper';
 
@@ -955,27 +1396,17 @@
       void aura.offsetWidth;
     }
 
-    if (meta.tier === 'prism') {
-      cardState.revealing = true;
-      Bridge.vibrate('heavy');
-      $('holo-card').className = 'holo-flipper is-charging';
-      if (aura) aura.className = 'holo-aura is-prism';
-      cardState.revealTimer = setTimeout(function () {
-        cardState.revealTimer = 0;
-        finishReveal();
-      }, 220);
-    } else if (meta.tier === 'special') {
-      cardState.revealing = true;
-      Bridge.vibrate('medium');
-      if (aura) aura.className = 'holo-aura is-special';
-      cardState.revealTimer = setTimeout(function () {
-        cardState.revealTimer = 0;
-        finishReveal();
-      }, 120);
-    } else {
-      Bridge.vibrate('light');
+    // 每张卡都先蓄力再翻开；越稀有停得越久、震得越重，光晕在翻开那一刻亮起
+    var tier = meta.tier;
+    cardState.revealing = true;
+    Bridge.vibrate(tier === 'prism' ? 'heavy' : (tier === 'special' ? 'medium' : 'light'));
+    $('holo-card').className = 'holo-flipper is-charging';
+    cardState.revealTimer = setTimeout(function () {
+      cardState.revealTimer = 0;
+      if (aura && tier === 'prism') aura.className = 'holo-aura is-prism';
+      else if (aura && tier === 'special') aura.className = 'holo-aura is-special';
       finishReveal();
-    }
+    }, tier === 'prism' ? 900 : (tier === 'special' ? 640 : 420));
   }
 
   function toggleCardFlip() {
@@ -1335,7 +1766,9 @@
     state.busy = true;
     $('save-photo').disabled = true;
     setStatus('result-status', '正在存…');
+    var round = state.round;
     ensureTempFile().then(Bridge.saveImage).then(function () {
+      if (round === state.round) state.keptRound = round;   // 真的存进相册了，「再冲一张」不用再确认
       setStatus('result-status', '已经存到相册了。');
     }, function (err) {
       setStatus('result-status', failText(err, '存相册'));
@@ -1368,6 +1801,34 @@
   }
 
   /* ---------- 启动 ---------- */
+  /* 成片还没存进相册：第一下只提醒，3 秒内再点一次才清掉。
+     只认存相册成功（savePhoto 记下的 keptRound）；存失败、发笔记、存小卡都不算存了这张照片 */
+  function bindAgainConfirm() {
+    var btn = $('again'), armedUntil = 0, timer = 0;
+    function reset() {
+      clearTimeout(timer); timer = 0; armedUntil = 0;
+      btn.textContent = '再冲一张';
+      btn.className = 'btn btn-text';
+    }
+    btn.addEventListener('click', function () {
+      if (state.busy) return;   // 正在存或正在发：等它结束
+      if (state.keptRound !== state.round && Date.now() > armedUntil) {
+        armedUntil = Date.now() + 3000;
+        clearTimeout(timer);
+        timer = setTimeout(reset, 3000);
+        btn.textContent = '这张还没存，再点一次放弃';
+        btn.className = 'btn btn-text again-confirm';
+        return;
+      }
+      reset();
+      again();
+    });
+    // 离开出片页再回来，要重新点两下
+    $('open-card').addEventListener('click', reset);
+    $('open-binder-result').addEventListener('click', reset);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) reset(); });
+  }
+
   function boot() {
     if (!Bridge || !Film) {
       setStatus('intro-status', '暗房没准备好，请退出后重新打开。');
@@ -1389,7 +1850,7 @@
     $('close-binder').addEventListener('click', closeBinder);
     $('save-photo').addEventListener('click', savePhoto);
     $('post-note').addEventListener('click', postNote);
-    $('again').addEventListener('click', again);
+    bindAgainConfirm();
     window.addEventListener('resize', function () {
       fitTrays();
       fitCard();
@@ -1398,9 +1859,10 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
         stopCardLoop();
+        stopCardGyro();   // 后台不再占着陀螺仪订阅
       } else {
         state.lastTs = 0;
-        if (cardState.open && !cardState.binderOpen) startCardLoop();
+        if (cardState.open && !cardState.binderOpen) { startCardLoop(); startCardGyro(); }
       }
     });
     initIntro();
@@ -1408,4 +1870,3 @@
 
   boot();
 }());
-

@@ -20,6 +20,7 @@
 ├── AGENTS.md        项目规则：平台硬约束、协作流程
 ├── <工具名>/        每个工具一个目录，内容就是 zip 的内容（index.html 在根）
 ├── docs/            本目录
+├── tools/           本地测试工具（模拟宿主测试页、不缓存的静态服务、受保护函数比对），不进 zip
 ├── releases/        打包好的 zip，不进 git
 └── .review/         Agent 协作过程材料（截图、Gemini 规格与原始回答），不进 git
 ```
