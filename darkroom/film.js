@@ -154,12 +154,11 @@
 
   /* 保持比例铺满目标，多出的部分居中裁掉；用于比例和源图不同的画布（如小卡） */
   function drawCover(src, dst) {
-    var sw = src.width, sh = src.height, dw = dst.width, dh = dst.height;
-    var scale = Math.max(dw / sw, dh / sh);
-    var cw = dw / scale, ch = dh / scale;
+    var dw = dst.width, dh = dst.height;
+    var crop = cropBounds(src, dw / dh);
     var ctx = dst.getContext('2d');
     ctx.clearRect(0, 0, dw, dh);
-    ctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, dw, dh);
+    ctx.drawImage(src, crop.x, crop.y, crop.w, crop.h, 0, 0, dw, dh);
   }
 
   function cardPhotoBounds(photo, centerX, centerY) {
@@ -474,7 +473,7 @@
     ctx.beginPath(); ctx.moveTo(-w * 0.34, archY); ctx.lineTo(w * 0.34, archY); ctx.stroke();
     ctx.fillStyle = 'rgba(246,235,226,0.92)';
     ctx.font = '26px ' + SERIF;
-    ctx.fillText('冲印档案', 0, archY + 42, w * 0.68);
+    ctx.fillText(info.title || '冲印档案', 0, archY + 42, w * 0.68);
     ctx.fillStyle = 'rgba(226,200,184,0.86)';
     ctx.font = '18px ' + MONO;
     ctx.fillText([info.name, info.rarity, info.code].filter(Boolean).join(' · '), 0, archY + 76, w * 0.68);
@@ -490,9 +489,10 @@
     ctx.restore();
   }
 
-  function drawCardFront(ctx, photo, w, h, info) {
+  function drawCardFront(ctx, photo, w, h, info, fullBleed) {
     var paint = CARD_PAINT[info.material] || CARD_PAINT.rainbow;
-    var r = w * 0.047, trimInset = Math.round(w * 0.024);
+    var r = fullBleed ? 0 : w * 0.047;
+    var trimInset = Math.round(w * 0.024), trimRadius = w * 0.032;
     var light = info.light;
     var lx = (light ? light.x - 0.5 : -0.12) * w;
     var ly = (light ? light.y - 0.5 : -0.14) * h;
@@ -567,7 +567,7 @@
 
     // 材质专属镂空烫箔内框（6px 安全区内，不切割人像）
     ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.72; ctx.lineWidth = 2;
-    roundRectPath(ctx, -w / 2 + trimInset, -h / 2 + trimInset, w - trimInset * 2, h - trimInset * 2, r * 0.65);
+    roundRectPath(ctx, -w / 2 + trimInset, -h / 2 + trimInset, w - trimInset * 2, h - trimInset * 2, trimRadius);
     ctx.stroke();
     ctx.globalAlpha = 1;
 
@@ -598,10 +598,8 @@
   function composeCardFace(photo, info) {
     var w = 880, h = 1360;
     var c = makeCanvas(w, h), ctx = c.getContext('2d');
-    ctx.fillStyle = '#140e0d';
-    ctx.fillRect(0, 0, w, h);
     ctx.translate(w / 2, h / 2);
-    drawCardFront(ctx, photo, w, h, info);
+    drawCardFront(ctx, photo, w, h, info, true);
     return c;
   }
 
@@ -609,26 +607,39 @@
     var W = 1080, H = 1440;
     var c = makeCanvas(W, H), ctx = c.getContext('2d');
     var bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#1b0f0d'); bg.addColorStop(1, '#0c0706');
+    bg.addColorStop(0, '#1d100e'); bg.addColorStop(1, '#0b0605');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    var glow = ctx.createRadialGradient(W / 2, -120, 0, W / 2, -120, 900);
-    glow.addColorStop(0, 'rgba(190,40,25,0.35)'); glow.addColorStop(1, 'rgba(190,40,25,0)');
+    var glow = ctx.createRadialGradient(W / 2, -100, 0, W / 2, -100, 920);
+    glow.addColorStop(0, 'rgba(196,46,32,0.34)'); glow.addColorStop(1, 'rgba(196,46,32,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-    var cw = 440, ch = 680;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(236,220,210,0.46)';
+    ctx.font = '18px ' + MONO;
+    ctx.fillText('DARKROOM LAB · PRINT', W / 2, 168);
+
+    var cw = 456, ch = cw * 85 / 55, cardY = 678, cardX = 292;
     ctx.save();
-    ctx.translate(300, 660);
+    ctx.translate(cardX, cardY);
+    ctx.shadowColor = 'rgba(0,0,0,0.58)'; ctx.shadowBlur = 44; ctx.shadowOffsetY = 20;
+    roundRectPath(ctx, -cw / 2, -ch / 2, cw, ch, cw * 0.047);
+    ctx.fillStyle = '#140e0d'; ctx.fill();
+    ctx.shadowColor = 'transparent';
     drawCardFront(ctx, photo, cw, ch, info);
     ctx.restore();
     ctx.save();
-    ctx.translate(W - 300, 660);
+    ctx.translate(W - cardX, cardY);
+    ctx.shadowColor = 'rgba(0,0,0,0.58)'; ctx.shadowBlur = 44; ctx.shadowOffsetY = 20;
+    roundRectPath(ctx, -cw / 2, -ch / 2, cw, ch, cw * 0.047);
+    ctx.fillStyle = '#1a1412'; ctx.fill();
+    ctx.shadowColor = 'transparent';
     drawCardBack(ctx, cw, ch, info);
     ctx.restore();
     // 落款
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(236,220,210,0.85)'; ctx.font = '30px ' + SERIF;
-    ctx.fillText('暗房冲印店', W / 2, 1110);
-    ctx.fillStyle = 'rgba(236,220,210,0.5)'; ctx.font = '22px ' + MONO;
-    ctx.fillText(info.collection, W / 2, 1152);
+    ctx.fillStyle = 'rgba(242,228,218,0.88)'; ctx.font = '32px ' + SERIF;
+    ctx.fillText('暗房冲印店 · ' + info.name, W / 2, 1188);
+    ctx.fillStyle = 'rgba(220,198,186,0.58)'; ctx.font = '21px ' + MONO;
+    ctx.fillText(info.no.toUpperCase() + ' · ' + info.collection, W / 2, 1236);
     return c;
   }
 

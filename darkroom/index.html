@@ -46,13 +46,13 @@
         </div>
         <h1 class="intro-title">暗房冲印店</h1>
         <p class="intro-sub">在红灯下，等一张照片慢慢显影</p>
-        <p class="intro-simulation">模拟暗房冲印</p>
+        <p class="intro-simulation">· 模拟暗房冲印 ·</p>
       </header>
 
       <div class="intro-tray" aria-hidden="true">
         <div class="tray tray-static">
           <div class="tray-paper">
-            <canvas id="sample-preview" width="360" height="480"></canvas>
+            <canvas id="sample-preview" width="360" height="480" data-sample-src="./sample-clouds.jpg"></canvas>
           </div>
           <div class="tray-liquid"></div>
         </div>
@@ -80,7 +80,7 @@
           </svg>
           <span>返回</span>
         </button>
-        <span class="crop-format-badge" id="crop-format-badge" aria-live="polite">ORIGINAL</span>
+        <span class="crop-format-badge" id="crop-format-badge" aria-live="polite">原图</span>
         <h2 class="visually-hidden" id="crop-title" tabindex="-1">裁剪照片</h2>
       </header>
       <div class="crop-stage" id="crop-stage">

@@ -27,16 +27,16 @@
   };
 
   var prismTexUrl = '';
-  var portraitSampleCache = null;
+  var sampleRequest = null;
 
   var state = {
     base: null, aspect: 4 / 3,
     dev: 0, devTime: 0, agiSum: 0, agi: 0, agiTarget: 0,
     raf: 0, lastTs: 0, gyroOn: false, gyroRound: 0, gyroCbs: [],
-    fix: 0, fixHolding: false, fixTimer: 0, lastFixSec: 0,
+    fix: 0, fixHolding: false, fixTimer: 0, lastFixSec: 0, phaseTimer: 0,
     printMode: 'clean', prints: null, cardInfo: null, count: 0, busy: false,
     material: '', collected: [], photo: null, round: 0,
-    shotDate: '', isNewMaterial: false,
+    shotDate: '', toneName: '', isNewMaterial: false,
     lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0,
     lastSloshRippleTs: 0,
     sweetBuzzedRound: -1
@@ -102,362 +102,6 @@
   function clearFlash() {
     var flash = $('light-flash');
     if (flash) flash.className = 'light-flash';
-  }
-
-  /* ---------- 离线人像示例底片（黄金时刻逆光海边人像，兼顾高光/中间调/深暗部以展现各冲洗与卡面效果） ---------- */
-  function makePortraitSample() {
-    if (portraitSampleCache) return portraitSampleCache;
-    var w = 600, h = 800;
-    var c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    var ctx = c.getContext('2d');
-
-    // 1. 黄金时刻暖色天海背景（丰富渐变层次）
-    var sky = ctx.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0.0, '#1e2842');
-    sky.addColorStop(0.28, '#4a3d58');
-    sky.addColorStop(0.50, '#b96958');
-    sky.addColorStop(0.64, '#f0ae72');
-    sky.addColorStop(0.76, '#f8d59a');
-    sky.addColorStop(1.0, '#2a222b');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
-
-    // 2. 逆光太阳光晕（营造胶片晕光与高光测试区）
-    var sun = ctx.createRadialGradient(430, 290, 12, 430, 290, 320);
-    sun.addColorStop(0.0, 'rgba(255, 250, 232, 0.92)');
-    sun.addColorStop(0.22, 'rgba(255, 214, 152, 0.62)');
-    sun.addColorStop(0.55, 'rgba(232, 124, 92, 0.22)');
-    sun.addColorStop(1.0, 'rgba(232, 124, 92, 0)');
-    ctx.fillStyle = sun;
-    ctx.fillRect(0, 0, w, h);
-
-    // 3. 远景海面与波光（中间调与水平层次）
-    var sea = ctx.createLinearGradient(0, 495, 0, h);
-    sea.addColorStop(0.0, '#6a4c56');
-    sea.addColorStop(0.32, '#3d3345');
-    sea.addColorStop(1.0, '#1a1721');
-    ctx.fillStyle = sea;
-    ctx.fillRect(0, 495, w, h - 495);
-
-    // 远山剪影
-    ctx.fillStyle = 'rgba(42, 34, 52, 0.55)';
-    ctx.beginPath();
-    ctx.moveTo(0, 498);
-    ctx.quadraticCurveTo(95, 456, 210, 488);
-    ctx.quadraticCurveTo(360, 446, 510, 484);
-    ctx.quadraticCurveTo(565, 470, w, 482);
-    ctx.lineTo(w, 502);
-    ctx.lineTo(0, 502);
-    ctx.closePath();
-    ctx.fill();
-
-    // 海面碎金反光
-    var i, rx, ry, rw;
-    for (i = 0; i < 28; i += 1) {
-      ry = 505 + i * 7.5;
-      rw = Math.max(16, 130 - i * 3.4);
-      rx = 415 - rw * 0.5 + Math.sin(i * 1.9) * 18;
-      ctx.fillStyle = 'rgba(255, 224, 168, ' + (0.28 - i * 0.008).toFixed(3) + ')';
-      ctx.fillRect(rx, ry, rw, 2.2);
-    }
-
-    // 柔和散景光斑（体现闪粉/棱镜的高光层次）
-    var bokeh = [
-      [96, 152, 34, 0.14], [156, 226, 22, 0.18], [492, 174, 42, 0.16],
-      [524, 348, 28, 0.15], [72, 368, 26, 0.12], [462, 430, 18, 0.20]
-    ];
-    for (i = 0; i < bokeh.length; i += 1) {
-      var b = bokeh[i];
-      var bg = ctx.createRadialGradient(b[0], b[1], 2, b[0], b[1], b[2]);
-      bg.addColorStop(0, 'rgba(255, 240, 210, ' + b[3] + ')');
-      bg.addColorStop(0.75, 'rgba(255, 218, 172, ' + (b[3] * 0.5).toFixed(3) + ')');
-      bg.addColorStop(1, 'rgba(255, 218, 172, 0)');
-      ctx.fillStyle = bg;
-      ctx.beginPath();
-      ctx.arc(b[0], b[1], b[2], 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 4. 人物后发与随风飘动发丝（深栗色暗部）
-    ctx.save();
-    ctx.fillStyle = '#1b1214';
-    ctx.beginPath();
-    ctx.moveTo(192, 278);
-    ctx.bezierCurveTo(165, 360, 148, 468, 176, 560);
-    ctx.lineTo(418, 558);
-    ctx.bezierCurveTo(440, 456, 422, 348, 390, 268);
-    ctx.bezierCurveTo(366, 186, 228, 180, 192, 278);
-    ctx.closePath();
-    ctx.fill();
-
-    // 右侧逆光金色发丝边缘光
-    ctx.strokeStyle = 'rgba(255, 216, 154, 0.72)';
-    ctx.lineWidth = 3.2;
-    ctx.beginPath();
-    ctx.moveTo(378, 232);
-    ctx.bezierCurveTo(418, 294, 434, 376, 422, 452);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255, 196, 134, 0.42)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(392, 268);
-    ctx.bezierCurveTo(438, 336, 456, 404, 444, 474);
-    ctx.stroke();
-
-    // 5. 肩颈与针织开衫（奶白色中间调 + 深色内搭领口）
-    // 颈部与锁骨光影
-    var neckGrad = ctx.createLinearGradient(255, 385, 335, 510);
-    neckGrad.addColorStop(0, '#d99e82');
-    neckGrad.addColorStop(0.5, '#efc1a4');
-    neckGrad.addColorStop(1, '#c88c72');
-    ctx.fillStyle = neckGrad;
-    ctx.beginPath();
-    ctx.moveTo(256, 396);
-    ctx.lineTo(330, 396);
-    ctx.lineTo(344, 502);
-    ctx.lineTo(240, 502);
-    ctx.closePath();
-    ctx.fill();
-
-    // 下巴在颈部的柔和投影
-    ctx.fillStyle = 'rgba(92, 46, 38, 0.28)';
-    ctx.beginPath();
-    ctx.ellipse(294, 418, 36, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 奶白针织开衫主体
-    var coatGrad = ctx.createLinearGradient(110, 500, 480, 800);
-    coatGrad.addColorStop(0, '#c8b8ab');
-    coatGrad.addColorStop(0.45, '#f2e8dc');
-    coatGrad.addColorStop(0.85, '#fff4e4');
-    coatGrad.addColorStop(1, '#d8c5b4');
-    ctx.fillStyle = coatGrad;
-    ctx.beginPath();
-    ctx.moveTo(108, 800);
-    ctx.bezierCurveTo(118, 646, 152, 536, 232, 496);
-    ctx.lineTo(362, 496);
-    ctx.bezierCurveTo(442, 534, 480, 644, 494, 800);
-    ctx.closePath();
-    ctx.fill();
-
-    // 深蓝灰水手/衬衫翻领（形成强对比暗部）
-    ctx.fillStyle = '#242b3d';
-    ctx.beginPath();
-    ctx.moveTo(232, 496);
-    ctx.lineTo(294, 592);
-    ctx.lineTo(362, 496);
-    ctx.lineTo(334, 490);
-    ctx.lineTo(294, 550);
-    ctx.lineTo(258, 490);
-    ctx.closePath();
-    ctx.fill();
-
-    // 领口白边细线
-    ctx.strokeStyle = 'rgba(255, 245, 234, 0.72)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(242, 498);
-    ctx.lineTo(294, 580);
-    ctx.lineTo(352, 498);
-    ctx.stroke();
-
-    // 6. 面部轮廓与柔和五官（胶片日系少女四分之三侧颜）
-    var faceGrad = ctx.createRadialGradient(318, 304, 18, 290, 320, 128);
-    faceGrad.addColorStop(0, '#fde2cd');
-    faceGrad.addColorStop(0.55, '#f1c2a5');
-    faceGrad.addColorStop(1, '#ce8e74');
-    ctx.fillStyle = faceGrad;
-    ctx.beginPath();
-    ctx.moveTo(222, 286);
-    ctx.bezierCurveTo(220, 368, 250, 418, 296, 422);
-    ctx.bezierCurveTo(342, 418, 368, 366, 368, 286);
-    ctx.bezierCurveTo(368, 224, 336, 198, 294, 198);
-    ctx.bezierCurveTo(252, 198, 222, 226, 222, 286);
-    ctx.closePath();
-    ctx.fill();
-
-    // 面部右侧暖金轮廓光
-    ctx.strokeStyle = 'rgba(255, 242, 214, 0.78)';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(358, 254);
-    ctx.bezierCurveTo(370, 316, 356, 376, 326, 408);
-    ctx.stroke();
-
-    // 柔和腮红
-    var blushL = ctx.createRadialGradient(252, 342, 4, 252, 342, 28);
-    blushL.addColorStop(0, 'rgba(228, 122, 108, 0.34)');
-    blushL.addColorStop(1, 'rgba(228, 122, 108, 0)');
-    ctx.fillStyle = blushL;
-    ctx.beginPath();
-    ctx.arc(252, 342, 28, 0, Math.PI * 2);
-    ctx.fill();
-
-    var blushR = ctx.createRadialGradient(334, 340, 4, 334, 340, 26);
-    blushR.addColorStop(0, 'rgba(232, 128, 110, 0.30)');
-    blushR.addColorStop(1, 'rgba(232, 128, 110, 0)');
-    ctx.fillStyle = blushR;
-    ctx.beginPath();
-    ctx.arc(334, 340, 26, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 眉毛
-    ctx.strokeStyle = '#3a2420';
-    ctx.lineWidth = 2.6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(240, 294);
-    ctx.quadraticCurveTo(260, 287, 276, 293);
-    ctx.moveTo(312, 292);
-    ctx.quadraticCurveTo(330, 286, 346, 293);
-    ctx.stroke();
-
-    // 双眼（清澈目光与高光点）
-    function drawEye(cx, cy) {
-      ctx.fillStyle = '#fff9f4';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 15, 8.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#2d1c1b';
-      ctx.beginPath();
-      ctx.arc(cx + 1.5, cy + 0.5, 7.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#5c3c36';
-      ctx.beginPath();
-      ctx.arc(cx + 1.5, cy + 2.2, 4.0, 0, Math.PI * 2);
-      ctx.fill();
-      // 眼神高光
-      ctx.fillStyle = '#fff7ea';
-      ctx.beginPath();
-      ctx.arc(cx + 4.0, cy - 2.0, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      // 上睫毛线
-      ctx.strokeStyle = '#231515';
-      ctx.lineWidth = 2.8;
-      ctx.beginPath();
-      ctx.moveTo(cx - 16, cy + 1);
-      ctx.quadraticCurveTo(cx, cy - 11, cx + 16, cy + 1);
-      ctx.stroke();
-    }
-    drawEye(260, 316);
-    drawEye(328, 315);
-
-    // 鼻影与微笑唇色
-    ctx.strokeStyle = 'rgba(148, 86, 68, 0.42)';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(295, 326);
-    ctx.quadraticCurveTo(298, 344, 292, 350);
-    ctx.stroke();
-
-    ctx.fillStyle = '#cc6f64';
-    ctx.beginPath();
-    ctx.moveTo(278, 376);
-    ctx.quadraticCurveTo(294, 370, 312, 376);
-    ctx.quadraticCurveTo(295, 389, 278, 376);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 224, 210, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(295, 379, 6, 1.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 7. 空气刘海与鬓角发丝（覆盖额头，立体层次）
-    var hairGrad = ctx.createLinearGradient(200, 175, 385, 340);
-    hairGrad.addColorStop(0, '#181012');
-    hairGrad.addColorStop(0.55, '#2b1b1c');
-    hairGrad.addColorStop(1, '#4c2c24');
-    ctx.fillStyle = hairGrad;
-    ctx.beginPath();
-    ctx.moveTo(202, 298);
-    ctx.bezierCurveTo(194, 218, 240, 168, 298, 170);
-    ctx.bezierCurveTo(356, 172, 396, 222, 388, 304);
-    ctx.bezierCurveTo(378, 260, 362, 242, 346, 276);
-    ctx.bezierCurveTo(334, 238, 314, 232, 302, 272);
-    ctx.bezierCurveTo(286, 236, 262, 238, 250, 276);
-    ctx.bezierCurveTo(234, 246, 214, 264, 202, 298);
-    ctx.closePath();
-    ctx.fill();
-
-    // 两侧修饰脸颊的碎发
-    ctx.fillStyle = '#1e1416';
-    ctx.beginPath();
-    ctx.moveTo(212, 266);
-    ctx.bezierCurveTo(202, 336, 208, 404, 226, 444);
-    ctx.bezierCurveTo(218, 390, 222, 332, 228, 274);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(376, 268);
-    ctx.bezierCurveTo(384, 336, 376, 402, 358, 446);
-    ctx.bezierCurveTo(364, 390, 362, 334, 360, 276);
-    ctx.closePath();
-    ctx.fill();
-
-    // 8. 复古 35mm 旁轴胶片机与双手（呼应暗房主题，增加精密金属/皮质质感）
-    // 相机机身
-    ctx.fillStyle = '#1a1a1e';
-    ctx.fillRect(218, 578, 164, 108);
-    // 银色机顶
-    var topPlate = ctx.createLinearGradient(218, 578, 382, 608);
-    topPlate.addColorStop(0, '#c8cfd6');
-    topPlate.addColorStop(0.5, '#f2f5f8');
-    topPlate.addColorStop(1, '#9ca4ae');
-    ctx.fillStyle = topPlate;
-    ctx.fillRect(218, 578, 164, 28);
-    // 快门旋钮与取景窗
-    ctx.fillStyle = '#aeb6c0';
-    ctx.fillRect(236, 568, 22, 10);
-    ctx.fillRect(344, 570, 18, 8);
-    ctx.fillStyle = '#151922';
-    ctx.fillRect(320, 584, 26, 15);
-    ctx.fillStyle = 'rgba(130, 200, 255, 0.35)';
-    ctx.fillRect(323, 586, 10, 6);
-
-    // 镜头外圈（金属银 + 镀膜玻璃）
-    ctx.fillStyle = '#d4dbe2';
-    ctx.beginPath();
-    ctx.arc(298, 636, 40, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#202228';
-    ctx.beginPath();
-    ctx.arc(298, 636, 33, 0, Math.PI * 2);
-    ctx.fill();
-    var lensGrad = ctx.createRadialGradient(290, 628, 4, 298, 636, 24);
-    lensGrad.addColorStop(0, '#5a7ea8');
-    lensGrad.addColorStop(0.5, '#1d273c');
-    lensGrad.addColorStop(1, '#0c0f18');
-    ctx.fillStyle = lensGrad;
-    ctx.beginPath();
-    ctx.arc(298, 636, 23, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 245, 224, 0.72)';
-    ctx.beginPath();
-    ctx.ellipse(290, 627, 6, 3.2, -0.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 双手托举相机
-    ctx.fillStyle = '#ebb99c';
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(190, 598, 34, 72, 14) : ctx.fillRect(190, 598, 34, 72);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(376, 598, 34, 72, 14) : ctx.fillRect(376, 598, 34, 72);
-    ctx.fill();
-
-    // 9. 轻柔的画面暖色晕光收尾
-    var flare = ctx.createRadialGradient(460, 250, 10, 460, 250, 440);
-    flare.addColorStop(0, 'rgba(255, 232, 184, 0.24)');
-    flare.addColorStop(0.5, 'rgba(255, 178, 126, 0.08)');
-    flare.addColorStop(1, 'rgba(255, 178, 126, 0)');
-    ctx.fillStyle = flare;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.restore();
-    portraitSampleCache = c;
-    return c;
   }
 
   /* ---------- 棱镜碎冰多面体纹理（中心主体避让：中心柔和通透，四周晶面锐利） ---------- */
@@ -574,18 +218,33 @@
   }
 
   /* ---------- 首屏 ---------- */
+  function loadSample() {
+    if (!sampleRequest) {
+      sampleRequest = new Promise(function (resolve, reject) {
+        var image = new Image();
+        image.onload = function () { resolve(image); };
+        image.onerror = reject;
+        image.src = $('sample-preview').getAttribute('data-sample-src');
+      }).catch(function (err) {
+        sampleRequest = null;
+        throw err;
+      });
+    }
+    return sampleRequest;
+  }
+
   function initIntro() {
     var preview = $('sample-preview');
     preview.style.webkitFilter = 'none';
     preview.style.filter = 'none';
     setTimeout(function () {
-      try {
+      loadSample().then(function (sample) {
         var small = document.createElement('canvas');
-        small.width = 360; small.height = 480;
-        Film.drawFit(makePortraitSample(), small);
+        small.width = preview.width; small.height = preview.height;
+        Film.drawCover(sample, small);
         var shot = Film.develop(small, { dev: 1, uneven: 0, fix: 1, leak: false, dust: false });
         Film.drawFit(shot, preview);
-      } catch (e) { /* 示例图失败不影响使用 */ }
+      }).catch(function () { /* 示例图失败不影响选照片 */ });
     }, 30);
 
     $('pick-input').addEventListener('change', function (e) {
@@ -606,18 +265,13 @@
     $('use-sample').addEventListener('click', function () {
       if (state.busy) return;
       state.busy = true;
-      var sample = new Image();
-      sample.onload = function () {
+      loadSample().then(function (sample) {
         state.busy = false;
         startCrop(sample);
-      };
-      function failSample() {
+      }, function () {
         state.busy = false;
         setStatus('intro-status', '样片暂时无法打开，可以选一张自己的照片');
-      }
-      sample.onerror = failSample;
-      try { sample.src = makePortraitSample().toDataURL('image/png'); }
-      catch (err) { failSample(); }
+      });
     });
     $('use-sample').disabled = false;
     setStatus('intro-status', '');
@@ -862,6 +516,20 @@
   }
 
   /* ---------- 显影 ---------- */
+  function clearPhaseTimer() {
+    clearTimeout(state.phaseTimer);
+    state.phaseTimer = 0;
+  }
+
+  function schedulePhase(next, delay) {
+    clearPhaseTimer();
+    var round = state.round;
+    state.phaseTimer = setTimeout(function () {
+      state.phaseTimer = 0;
+      if (round === state.round) next();
+    }, delay);
+  }
+
   function startDevelop(base) {
     state.base = base;
     state.aspect = base.height / base.width;
@@ -886,7 +554,7 @@
     setStatus('dev-hint', '放大曝光…');
     show('develop');
     Bridge.vibrate('light');
-    setTimeout(beginDevelop, EXPOSURE_MS);
+    schedulePhase(beginDevelop, EXPOSURE_MS);
   }
 
   function beginDevelop() {
@@ -1004,7 +672,7 @@
       var sweetCls = isSweet ? 'screen screen-develop is-sweet' : 'screen screen-develop';
       if (devScreen.className !== sweetCls) {
         devScreen.className = sweetCls;
-        if (isSweet) setStatus('dev-hint', '可以取出相纸');
+        if (isSweet) setStatus('dev-hint', '影调渐成，可随时取出');
         if (isSweet && state.sweetBuzzedRound !== state.round) {
           state.sweetBuzzedRound = state.round;
           Bridge.vibrate('light');
@@ -1018,8 +686,8 @@
     var pullCls = state.dev > 0.8 ? 'btn btn-primary' : 'btn btn-ghost';
     if (pullBtn.className !== pullCls) pullBtn.className = pullCls;
     var hint = $('dev-hint');
-    if (state.dev > 1.35 && hint.textContent !== '影调已深，可以取出相纸') {
-      hint.textContent = '影调已深，可以取出相纸';
+    if (state.dev > 1.35 && hint.textContent !== '影调已深，再留将沉入暗处') {
+      hint.textContent = '影调已深，再留将沉入暗处';
     }
 
     state.raf = requestAnimationFrame(tick);
@@ -1127,7 +795,7 @@
     $('step-light').className = '';
     $('screen-fix').className = 'screen screen-fix is-stopping';
     show('fix');
-    setTimeout(function () {
+    schedulePhase(function () {
       $('screen-fix').className = 'screen screen-fix';
       setStatus('fix-hint', '');
       $('fix-hold').disabled = false;
@@ -1158,7 +826,7 @@
         $('step-fix').className = 'is-done';
         $('step-light').className = 'is-on';
         Bridge.vibrate('light');
-        setTimeout(lightsOn, WASH_MS);
+        schedulePhase(lightsOn, WASH_MS);
         return;
       }
       var leftSec = Math.max(1, Math.ceil((1 - state.fix) * FIX_SECONDS));
@@ -2045,7 +1713,7 @@
     $('card-back-date').textContent = isSample ? 'ARCHIVE' : state.shotDate;
 
     var bt = $('card-back-title');
-    if (bt) bt.textContent = isSample ? '暗房工艺样卡' : '冲印档案';
+    if (bt) bt.textContent = isSample ? '暗房工艺样卡' : (state.toneName || '冲印档案');
     var bm = $('card-back-mat');
     if (bm) bm.textContent = meta.name;
     var br = $('card-back-rarity');
@@ -2508,6 +2176,7 @@
       photoBounds: cardState.photoBounds,
       material: mat, name: meta.name, rarity: meta.rarity, code: meta.code, mark: RARITY_MARK[meta.code] || '',
       light: light,
+      title: state.toneName,
       origin: meta.origin,
       no: no, date: state.shotDate || '',
       collection: '已收集 ' + got + '/' + MATERIALS.length
@@ -2866,8 +2535,9 @@
         collectMaterial(state.material);
         state.isNewMaterial = state.collected.length > prevCollectedLen;
         showPrint('clean');
-        setStatus('result-report', '显影 ' + Math.round(state.devTime) + ' 秒 · ' + devLabel(params.dev) +
-          (params.uneven > 0.3 ? ' · 显影不均' : ''));
+        state.toneName = devLabel(params.dev);
+        setStatus('result-report', '显影 ' + Math.round(state.devTime) + ' 秒 · ' + state.toneName +
+          ' · ' + (params.uneven > 0.3 ? '局部深浅' : '影调匀净'));
         $('open-card-text').textContent = '拆封暗房小卡';
         $('open-card-dot').hidden = !state.isNewMaterial;
         updateBinderCounts();
@@ -2931,12 +2601,13 @@
   }
 
   function again() {
+    clearPhaseTimer();
     closeBinder(true);
     closeCard(true);
     resetSaveFeedback('save-photo');
     clearFlash();
     document.body.className = '';
-    state.base = null; state.prints = null; state.cardInfo = null; state.photo = null; state.material = '';
+    state.base = null; state.prints = null; state.cardInfo = null; state.photo = null; state.material = ''; state.toneName = '';
     state.isNewMaterial = false; state.round += 1;
     cardState.photoBounds = null;
     $('result-img').removeAttribute('src');
@@ -3061,6 +2732,7 @@
           return;
         }
         reset();
+        clearPhaseTimer();
         stopDevelopLoop();
         state.sweetBuzzedRound = -1;
         var ds = $('screen-develop');

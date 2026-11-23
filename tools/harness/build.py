@@ -16,6 +16,7 @@ pairs = [
      '<script src="../../tools/harness/mock.js"></script>\n  <script defer src="../../darkroom/bridge.js"></script>'),
     ('src="./film.js"', 'src="../../darkroom/film.js"'),
     ('src="./app.js"', 'src="../../darkroom/app.js"'),
+    ('data-sample-src="./sample-clouds.jpg"', 'data-sample-src="../../darkroom/sample-clouds.jpg"'),
 ]
 for old, new in pairs:
     if old not in src:
