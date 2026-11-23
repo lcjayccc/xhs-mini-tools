@@ -275,6 +275,7 @@
               </button>
             </div>
             <p class="status" id="result-status" role="status"></p>
+            <span class="visually-hidden" id="result-toast-status" role="status"></span>
           </div>
         </div>
       </div>
@@ -412,6 +413,7 @@
             <span class="card-caption-new" id="card-caption-new" hidden>新收入卡册</span>
           </div>
           <p class="card-tip" id="card-tip" role="status">轻触拆封</p>
+          <span class="visually-hidden toast-announcement" role="status"></span>
         </div>
         <section class="card-framing" id="card-framing" aria-label="小卡照片构图" hidden>
           <canvas id="card-framing-canvas" width="360" height="350" tabindex="0" role="group" aria-label="小卡取景，可用方向键移动照片"></canvas>
@@ -449,6 +451,8 @@
         <span class="bp-seg"></span><span class="bp-seg"></span><span class="bp-seg"></span>
         <span class="bp-seg"></span><span class="bp-seg"></span><span class="bp-seg"></span>
       </div>
+      <p class="binder-empty-lead" id="binder-empty-lead" hidden>拆封本轮小卡，点亮第一张材质</p>
+      <span class="visually-hidden toast-announcement" role="status"></span>
       <div class="binder-scroll">
         <div class="binder-sheet">
           <div class="binder-grid" id="card-collect-grid"></div>
@@ -478,6 +482,19 @@
           <span>按住看冲印前</span>
         </button>
         <p class="preview-tip" id="preview-tip" aria-hidden="true">双击看细节 · 轻点返回</p>
+        <span class="visually-hidden toast-announcement" role="status"></span>
+      </div>
+    </div>
+
+    <!-- 顶部轻量状态提示（仅承接已成功的非关键回调，不阻塞底层操作） -->
+    <div class="app-toast-wrap" aria-hidden="true">
+      <div class="app-toast" id="app-toast" hidden>
+        <span class="app-toast-ico" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="13" height="13">
+            <path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="app-toast-text" id="app-toast-text"></span>
       </div>
     </div>
   </div>

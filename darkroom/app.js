@@ -59,11 +59,15 @@
     thumb: null
   };
 
-  var previewState = { open: false, opener: null, tipTimer: 0, compareBy: null, original: null, zoomed: false, tapTimer: 0, lastTapTs: 0 };
+  var previewState = {
+    open: false, closing: false, opener: null, tipTimer: 0, animTimer: 0,
+    compareBy: null, original: null, zoomed: false, tapTimer: 0, lastTapTs: 0
+  };
+  var toastState = { hideTimer: 0, cleanTimer: 0, announcement: null };
   var cropState = null;
 
   function show(name) {
-    if (name !== 'result' && previewState.open) closePreview(true);
+    if (name !== 'result' && (previewState.open || previewState.closing)) closePreview(true);
     screens.forEach(function (s) { $('screen-' + s).hidden = s !== name; });
     if (name !== 'result') {
       fitTrays();
@@ -91,6 +95,48 @@
   }
 
   function setStatus(id, text) { $(id).textContent = text || ''; }
+
+  function hideToast(instant) {
+    var toast = $('app-toast');
+    clearTimeout(toastState.hideTimer);
+    clearTimeout(toastState.cleanTimer);
+    toastState.hideTimer = 0;
+    toastState.cleanTimer = 0;
+    if (toastState.announcement) toastState.announcement.textContent = '';
+    toastState.announcement = null;
+    if (!toast || toast.hidden) return;
+    if (instant) {
+      toast.className = 'app-toast';
+      toast.hidden = true;
+      return;
+    }
+    var dark = toast.className.indexOf('is-dark') >= 0 ? ' is-dark' : '';
+    toast.className = 'app-toast' + dark + ' is-leaving';
+    toastState.cleanTimer = setTimeout(function () {
+      toastState.cleanTimer = 0;
+      toast.className = 'app-toast';
+      toast.hidden = true;
+    }, isReducedMotion() ? 160 : 230);
+  }
+
+  function showToast(text, forceDark) {
+    var toast = $('app-toast'), label = $('app-toast-text');
+    if (!toast || !label || !text) return;
+    hideToast(true);
+    var dark = (forceDark || cardState.open || cardState.binderOpen) ? ' is-dark' : '';
+    var active = getActiveModal();
+    toastState.announcement = (active && active.querySelector('.toast-announcement')) || $('result-toast-status');
+    label.textContent = text;
+    toast.hidden = false;
+    toast.className = 'app-toast' + dark;
+    void toast.offsetWidth;
+    toast.className = 'app-toast' + dark + ' is-shown';
+    toastState.announcement.textContent = text;
+    toastState.hideTimer = setTimeout(function () {
+      toastState.hideTimer = 0;
+      hideToast(false);
+    }, 3000);
+  }
   function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
   function clamp11(x) { return x < -1 ? -1 : (x > 1 ? 1 : x); }
   function pad(n, len) { var s = String(n); while (s.length < len) s = '0' + s; return s; }
@@ -1001,7 +1047,7 @@
   }
 
   function getActiveModal() {
-    if (previewState.open) return $('preview-modal');
+    if (previewState.open || previewState.closing) return $('preview-modal');
     if (cardState.binderOpen) return $('binder-modal');
     if (cardState.open) return $('card-modal');
     return null;
@@ -1040,7 +1086,7 @@
       if (!modal) return;
       if (e.key === 'Escape' || e.key === 'Esc') {
         e.preventDefault();
-        if (previewState.open) closePreview();
+        if (previewState.open || previewState.closing) closePreview();
         else if (cardState.binderOpen) closeBinder();
         else if (cardState.framing) closeCardFraming();
         else closeCard();
@@ -1399,6 +1445,8 @@
     if (elHead) elHead.textContent = '已收集 ' + shortText;
     var seal = $('binder-complete-seal');
     if (seal) seal.hidden = got < MATERIALS.length;
+    var emptyLead = $('binder-empty-lead');
+    if (emptyLead) emptyLead.hidden = got > 0;
     var prog = $('binder-progress');
     if (prog) {
       prog.className = got >= MATERIALS.length ? 'binder-progress is-complete' : 'binder-progress';
@@ -2221,8 +2269,9 @@
       // 合成放进 Promise 链：同步抛错也会走到失败分支，按钮和提示一定能恢复
       Promise.resolve().then(function () { return ensureCardShot(mode, light); }).then(Bridge.saveImage).then(function () {
         if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
-        $('card-tip').textContent = '已存入相册';
+        $('card-tip').textContent = cardState.flipped ? '轻点回到正面' : '轻晃赏光 · 轻点看背面';
         showSaveFeedback('save-card', btn, '已保存');
+        showToast('小卡已存入相册', true);
       }, function (err) {
         if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
         $('card-tip').textContent = failText(err, '保存小卡');
@@ -2337,9 +2386,78 @@
     $('result-img').src = state.prints[mode].url;
   }
 
+  function measurePreviewSourceRect() {
+    var rect = $('result-img').getBoundingClientRect();
+    var scroll = document.querySelector('.result-scroll').getBoundingClientRect();
+    if (rect.width <= 1 || rect.height <= 1 ||
+        rect.top < scroll.top - 1 || rect.bottom > scroll.bottom + 1 ||
+        rect.left < scroll.left - 1 || rect.right > scroll.right + 1) return null;
+    return rect;
+  }
+
+  function measurePreviewTargetRect(print) {
+    var img = $('preview-img');
+    var rect = img ? img.getBoundingClientRect() : null;
+    if (rect && rect.width > 1 && rect.height > 1) return rect;
+    var stage = $('preview-stage');
+    if (!stage || !print || !print.width || !print.height) return null;
+    var sr = stage.getBoundingClientRect();
+    var availW = Math.max(1, sr.width - 32);
+    var availH = Math.max(1, sr.height - 16);
+    var scale = Math.min(availW / print.width, availH / print.height, 1);
+    var w = print.width * scale;
+    var h = print.height * scale;
+    return {
+      left: sr.left + (sr.width - w) / 2,
+      top: sr.top + (sr.height - h) / 2,
+      width: w,
+      height: h
+    };
+  }
+
+  function clearPreviewImgStyle() {
+    var img = $('preview-img');
+    if (!img) return;
+    img.style.webkitTransition = '';
+    img.style.transition = '';
+    img.style.webkitTransform = '';
+    img.style.transform = '';
+  }
+
+  function finishClosePreview(noFocus) {
+    clearTimeout(previewState.animTimer);
+    previewState.animTimer = 0;
+    previewState.open = false;
+    previewState.closing = false;
+    showDevelopedPreview();
+    if (previewState.original) {
+      $('preview-stage').removeChild(previewState.original);
+      previewState.original = null;
+    }
+    previewState.zoomed = false;
+    clearTimeout(previewState.tapTimer);
+    previewState.tapTimer = 0;
+    clearTimeout(previewState.tipTimer);
+    previewState.tipTimer = 0;
+    clearPreviewImgStyle();
+    var modal = $('preview-modal');
+    modal.className = 'preview-modal';
+    modal.hidden = true;
+    var opener = previewState.opener;
+    previewState.opener = null;
+    if (noFocus !== true) restoreFocus(opener || $('open-preview'));
+  }
+
   function openPreview(e) {
-    if (!state.prints || previewState.open) return;
+    if (!state.prints) return;
+    if (previewState.closing) finishClosePreview(true);
+    if (previewState.open) return;
+    var srcRect = measurePreviewSourceRect();
+    var print = state.prints[state.printMode];
+    if (!print) return;
+
     previewState.open = true;
+    previewState.closing = false;
     previewState.printMode = state.printMode;
     previewState.opener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
       ? e.currentTarget : $('open-preview');
@@ -2350,7 +2468,9 @@
     previewState.lastTapTs = 0;
     clearTimeout(previewState.tapTimer);
     previewState.tapTimer = 0;
-    if (img) img.src = state.prints[previewState.printMode].url;
+    clearTimeout(previewState.animTimer);
+    previewState.animTimer = 0;
+    if (img) img.src = print.url;
     $('preview-compare').disabled = !state.base || !state.cardInfo;
     if (tip) {
       tip.textContent = '双击看细节 · 轻点返回';
@@ -2361,13 +2481,41 @@
       previewState.tipTimer = 0;
       if (tip) tip.className = 'preview-tip is-faded';
     }, 2000);
+
+    clearPreviewImgStyle();
+    modal.className = 'preview-modal';
     modal.hidden = false;
+
     if (isReducedMotion()) {
-      modal.className = 'preview-modal is-open';
-    } else {
-      modal.className = 'preview-modal';
       void modal.offsetWidth;
       modal.className = 'preview-modal is-open';
+    } else {
+      var dstRect = measurePreviewTargetRect(print);
+      var canFlip = !!(img && srcRect && dstRect && srcRect.width > 1 && srcRect.height > 1 &&
+        dstRect.width > 1 && dstRect.height > 1);
+      if (canFlip) {
+        var s = srcRect.width / dstRect.width;
+        var dx = (srcRect.left + srcRect.width / 2) - (dstRect.left + dstRect.width / 2);
+        var dy = (srcRect.top + srcRect.height / 2) - (dstRect.top + dstRect.height / 2);
+        img.style.webkitTransition = 'none';
+        img.style.transition = 'none';
+        var startTf = 'translate3d(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px,0) scale(' + s.toFixed(4) + ')';
+        img.style.webkitTransform = startTf;
+        img.style.transform = startTf;
+        void modal.offsetWidth;
+        img.style.webkitTransition = '';
+        img.style.transition = '';
+        img.style.webkitTransform = 'translate3d(0,0,0) scale(1)';
+        img.style.transform = 'translate3d(0,0,0) scale(1)';
+        modal.className = 'preview-modal is-open';
+        previewState.animTimer = setTimeout(function () {
+          previewState.animTimer = 0;
+          if (previewState.open && !previewState.closing) clearPreviewImgStyle();
+        }, 400);
+      } else {
+        void modal.offsetWidth;
+        modal.className = 'preview-modal is-open';
+      }
     }
     focusModal(modal, $('close-preview'));
   }
@@ -2380,6 +2528,10 @@
   }
 
   function togglePreviewZoom() {
+    if (!previewState.open || previewState.closing) return;
+    clearTimeout(previewState.animTimer);
+    previewState.animTimer = 0;
+    clearPreviewImgStyle();
     var stage = $('preview-stage');
     var modal = $('preview-modal');
     previewState.zoomed = !previewState.zoomed;
@@ -2392,24 +2544,64 @@
   }
 
   function closePreview(noFocus) {
-    if (!previewState.open) return;
-    previewState.open = false;
-    showDevelopedPreview();
-    if (previewState.original) {
-      $('preview-stage').removeChild(previewState.original);
-      previewState.original = null;
+    if (!previewState.open && !previewState.closing) return;
+    if (noFocus === true || previewState.closing) {
+      finishClosePreview(noFocus);
+      return;
     }
-    previewState.zoomed = false;
+    var img = $('preview-img');
+    var moving = img && previewState.animTimer ? window.getComputedStyle(img).transform : '';
+    clearTimeout(previewState.animTimer);
+    previewState.animTimer = 0;
     clearTimeout(previewState.tapTimer);
     previewState.tapTimer = 0;
     clearTimeout(previewState.tipTimer);
     previewState.tipTimer = 0;
+    showDevelopedPreview();
+
     var modal = $('preview-modal');
-    modal.className = 'preview-modal';
-    modal.hidden = true;
-    var opener = previewState.opener;
-    previewState.opener = null;
-    if (noFocus !== true) restoreFocus(opener || $('open-preview'));
+    if (img) {
+      img.style.transition = img.style.webkitTransition = 'none';
+      img.style.transform = img.style.webkitTransform = 'none';
+    }
+
+    previewState.open = false;
+    previewState.closing = true;
+    var zoomClass = previewState.zoomed ? ' is-zoomed' : '';
+
+    if (isReducedMotion()) {
+      modal.className = 'preview-modal is-closing' + zoomClass;
+      previewState.animTimer = setTimeout(function () {
+        finishClosePreview(noFocus);
+      }, 160);
+      return;
+    }
+
+    var srcRect = measurePreviewSourceRect();
+    var dstRect = img ? img.getBoundingClientRect() : null;
+    var visible = !previewState.zoomed && !!(srcRect && dstRect && dstRect.width > 1 && dstRect.height > 1);
+
+    if (visible) {
+      var s = srcRect.width / dstRect.width;
+      var dx = (srcRect.left + srcRect.width / 2) - (dstRect.left + dstRect.width / 2);
+      var dy = (srcRect.top + srcRect.height / 2) - (dstRect.top + dstRect.height / 2);
+      if (moving && moving !== 'none') img.style.webkitTransform = img.style.transform = moving;
+      void img.offsetWidth;
+      img.style.webkitTransition = img.style.transition = '';
+      modal.className = 'preview-modal is-closing';
+      var endTf = 'translate3d(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px,0) scale(' + s.toFixed(4) + ')';
+      img.style.webkitTransform = endTf;
+      img.style.transform = endTf;
+      previewState.animTimer = setTimeout(function () {
+        finishClosePreview(noFocus);
+      }, 270);
+    } else {
+      clearPreviewImgStyle();
+      modal.className = 'preview-modal is-closing is-fade-only' + zoomClass;
+      previewState.animTimer = setTimeout(function () {
+        finishClosePreview(noFocus);
+      }, 230);
+    }
   }
 
   function showOriginalPreview(by) {
@@ -2579,9 +2771,10 @@
     ensureTempFile(state.prints[mode]).then(Bridge.saveImage).then(function () {
       if (round !== state.round) return;
       state.keptRound = round;
-      if (mode === state.printMode && label) showSaveFeedback('save-photo', label, '已存入相册');
+      if (mode === state.printMode && label) showSaveFeedback('save-photo', label, '已保存');
       var savedLabel = mode === 'paper' ? '暗房相纸' : '纯净成片';
-      setStatus('result-status', savedLabel + '已存入相册');
+      setStatus('result-status', '');
+      showToast(savedLabel + '已存入相册', false);
     }, function (err) {
       if (round === state.round) setStatus('result-status', failText(err, '存相册'));
     }).then(function () { releaseBusy(); btn.disabled = false; });
@@ -2602,6 +2795,7 @@
 
   function again() {
     clearPhaseTimer();
+    hideToast(true);
     closeBinder(true);
     closeCard(true);
     resetSaveFeedback('save-photo');
@@ -2696,6 +2890,7 @@
     $('open-preview').addEventListener('click', openPreview);
     $('close-preview').addEventListener('click', function (e) { e.stopPropagation(); closePreview(); });
     $('preview-modal').addEventListener('click', function (e) {
+      if (!previewState.open) return;
       if (e.target === $('preview-img') || e.target === previewState.original) {
         var now = Date.now();
         if (now - previewState.lastTapTs < 260) {
@@ -2746,6 +2941,8 @@
       fitTrays();
       fitCard();
       fitCrop();
+      if (previewState.closing) finishClosePreview();
+      else if (previewState.open && previewState.animTimer) { clearTimeout(previewState.animTimer); previewState.animTimer = 0; clearPreviewImgStyle(); }
       if (previewState.zoomed) fitPreviewZoom();
     });
     fitTrays();
