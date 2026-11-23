@@ -27,13 +27,36 @@
 })();
 
 window.__round = function (devMs) {
-  return new Promise(function (resolve) {
-    (function go() { var s = document.getElementById('use-sample'); if (s.disabled || !document.getElementById('screen-intro').offsetParent && document.getElementById('screen-intro').hidden) { return setTimeout(go, 150); } s.click();
-      setTimeout(function () { document.getElementById('pull-out').click();
-        setTimeout(function () { document.getElementById('fix-hold').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, isPrimary: true }));
-          setTimeout(function () { document.getElementById('lights-on').click();
-            (function wait() { if (!document.getElementById('screen-result').hidden) return setTimeout(resolve, 300); setTimeout(wait, 150); })();
-          }, 4400); }, 600); }, devMs || 9500); })();
-  });
+  function el(id) { return document.getElementById(id); }
+  function waitFor(ready, message) {
+    var until = Date.now() + 30000;
+    return new Promise(function (resolve, reject) {
+      (function poll() {
+        if (ready()) return resolve();
+        if (Date.now() >= until) return reject(new Error(message));
+        setTimeout(poll, 100);
+      }());
+    });
+  }
+  return waitFor(function () { return !el('screen-intro').hidden && !el('use-sample').disabled; }, '首页未就绪')
+    .then(function () {
+      el('use-sample').click();
+      return waitFor(function () { return !el('screen-crop').hidden; }, '样片未进入取景台');
+    }).then(function () {
+      el('crop-apply').click();
+      return waitFor(function () {
+        return !el('screen-develop').hidden && !el('screen-develop').classList.contains('is-exposing');
+      }, '显影未开始');
+    }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, devMs || 12500); });
+    }).then(function () {
+      return waitFor(function () { return !el('pull-out').disabled; }, '相纸还不可取出');
+    }).then(function () {
+      el('pull-out').click();
+      return waitFor(function () { return !el('screen-fix').hidden && !el('fix-hold').disabled; }, '停显未完成');
+    }).then(function () {
+      el('fix-hold').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, isPrimary: true }));
+      return waitFor(function () { return !el('screen-result').hidden; }, '定影和水洗未完成');
+    });
 };
 window.__reveal = function () { document.getElementById('open-card').click(); return new Promise(function (r) { setTimeout(function () { var c = document.getElementById('holo-card'), b = c.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2; c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 77, isPrimary: true, clientX: x, clientY: y })); c.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 77, isPrimary: true, clientX: x, clientY: y })); setTimeout(r, 1600); }, 600); }); };

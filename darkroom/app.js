@@ -6,8 +6,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var screens = ['intro', 'crop', 'develop', 'fix', 'result'];
 
-  var BASE_RATE = 0.03;      // 不晃也会慢慢显影：约 33 秒到“刚好”
-  var AGITATE_RATE = 0.055;  // 晃得越勤快越快：满速约 12 秒
+  var DEVELOP_RATE = 0.075;
+  var EXPOSURE_MS = 800, STOP_BATH_MS = 700, WASH_MS = 1000;
   var FIX_SECONDS = 4;
   var COUNT_KEY = 'darkroom.count';
   var CARDS_KEY = 'darkroom.cards';
@@ -29,13 +29,12 @@
   var prismTexUrl = '';
   var portraitSampleCache = null;
 
-  var endFixHold = function () {};
   var state = {
     base: null, aspect: 4 / 3,
     dev: 0, devTime: 0, agiSum: 0, agi: 0, agiTarget: 0,
     raf: 0, lastTs: 0, gyroOn: false, gyroRound: 0, gyroCbs: [],
     fix: 0, fixHolding: false, fixTimer: 0, lastFixSec: 0,
-    cardUrl: '', cardInfo: null, tempPath: '', count: 0, busy: false,
+    printMode: 'clean', prints: null, cardInfo: null, count: 0, busy: false,
     material: '', collected: [], photo: null, round: 0,
     shotDate: '', isNewMaterial: false,
     lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0,
@@ -56,6 +55,7 @@
     sweepStart: 0, sweeping: false,
     slowFrames: 0, lowPerf: false, lastDraw: '',
     sampleMode: false, sampleMat: '', sampleReturn: null,
+    saveMode: 'face',
     thumb: null
   };
 
@@ -65,14 +65,6 @@
   function show(name) {
     if (name !== 'result' && previewState.open) closePreview(true);
     screens.forEach(function (s) { $('screen-' + s).hidden = s !== name; });
-    if (name === 'develop') {
-      var paper = $('tray-paper');
-      if (paper && !isReducedMotion()) {
-        paper.className = 'tray-paper';
-        void paper.offsetWidth;
-        paper.className = 'tray-paper is-dipping';
-      }
-    }
     if (name !== 'result') {
       fitTrays();
     } else {
@@ -543,7 +535,7 @@
       var paper = screen.querySelector('.tray-paper');
       var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 16 : 24);
       var hw = (sh - 24) / aspect + 24;
-      var w = Math.min(sw, hw, isIntro ? 296 : 360);
+      var w = Math.min(sw, hw, isIntro ? 304 : 360);
       tray.style.width = Math.floor(Math.max(Math.min(isIntro ? 90 : 140, hw), w)) + 'px';
       tray.style.maxWidth = 'none';
       paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
@@ -591,7 +583,7 @@
         var small = document.createElement('canvas');
         small.width = 360; small.height = 480;
         Film.drawFit(makePortraitSample(), small);
-        var shot = Film.develop(small, { dev: 1, uneven: 0, fix: 1, leak: true, dust: true });
+        var shot = Film.develop(small, { dev: 1, uneven: 0, fix: 1, leak: false, dust: false });
         Film.drawFit(shot, preview);
       } catch (e) { /* 示例图失败不影响使用 */ }
     }, 30);
@@ -600,20 +592,32 @@
       var file = e.target.files && e.target.files[0];
       if (!file || state.busy) return;
       state.busy = true;
-      setStatus('intro-status', '正在读取照片…');
+      setStatus('intro-status', '正在准备照片…');
       Film.loadImage(file).then(function (image) {
         state.busy = false;
         startCrop(image);
       }, function () {
         state.busy = false;
-        setStatus('intro-status', '这张照片读不出来，换一张试试。');
+        setStatus('intro-status', '这张照片暂时读不出来，换一张试试');
       });
       e.target.value = '';
     });
 
     $('use-sample').addEventListener('click', function () {
       if (state.busy) return;
-      startDevelop(makePortraitSample());
+      state.busy = true;
+      var sample = new Image();
+      sample.onload = function () {
+        state.busy = false;
+        startCrop(sample);
+      };
+      function failSample() {
+        state.busy = false;
+        setStatus('intro-status', '样片暂时无法打开，可以选一张自己的照片');
+      }
+      sample.onerror = failSample;
+      try { sample.src = makePortraitSample().toDataURL('image/png'); }
+      catch (err) { failSample(); }
     });
     $('use-sample').disabled = false;
     setStatus('intro-status', '');
@@ -717,7 +721,7 @@
     var badge = $('crop-format-badge');
     if (badge) badge.textContent = badgeText;
     $('crop-hint').textContent = Math.abs(cropState.ratio - Film.cardPhotoAspect) < 1e-9
-      ? '成片与小卡共用此取景' : '';
+      ? '此画幅与小卡满版同框' : '';
     paintCrop();
   }
 
@@ -862,7 +866,7 @@
     state.base = base;
     state.aspect = base.height / base.width;
     state.dev = 0; state.devTime = 0; state.agiSum = 0; state.agi = 0; state.agiTarget = 0;
-    state.fix = 0; state.cardUrl = ''; state.tempPath = '';
+    state.fix = 0; state.prints = null;
 
     var canvas = $('develop-canvas');
     canvas.width = Math.round(base.width / 2);
@@ -871,23 +875,39 @@
     paintDevelop(canvas, 0);
 
     $('pull-out').disabled = true;
-    $('dev-hint').textContent = '晃手机，或用手指划药盘';
+    $('pull-out').className = 'btn btn-ghost';
+    $('dev-time').textContent = '00:00';
+    $('dev-meter').style.transform = 'scaleX(0)';
+    $('dev-readout').className = 'readout-box';
+    $('tray-guide').className = 'tray-guide';
+    $('tray-paper').className = 'tray-paper';
+    $('dev-reselect').hidden = true;
+    $('screen-develop').className = 'screen screen-develop is-exposing';
+    setStatus('dev-hint', '放大曝光…');
     show('develop');
+    Bridge.vibrate('light');
+    setTimeout(beginDevelop, EXPOSURE_MS);
+  }
 
-    // 每轮一个独立回调：旧轮迟到的失败只会注销它自己，不会误伤当前轮的订阅
+  function beginDevelop() {
+    $('screen-develop').className = 'screen screen-develop';
+    $('dev-reselect').hidden = false;
+    if (!isReducedMotion()) $('tray-paper').className = 'tray-paper is-dipping';
+    setStatus('dev-hint', '轻晃手机，或用指尖轻划药液');
+    state.lastTs = 0;
+    state.developing = true;
+    // 每轮一个独立回调，避免上一轮迟到的结果影响当前订阅。
     var round = ++state.gyroRound;
     var cb = function (f) { onGyro(f); };
-    state.gyroCbs.push(cb);   // 启动前就登记：确认到达前捞出，也能被 stopAllGyro 释放
+    state.gyroCbs.push(cb);
     Bridge.startGyro(cb).then(function (ok) {
       var i = state.gyroCbs.indexOf(cb);
       if (i < 0) return;                       // 已经捞出、被释放了，迟到的确认不再加回
       if (!ok) state.gyroCbs.splice(i, 1);
       if (round !== state.gyroRound) return;
       state.gyroOn = ok;
-      if (!ok) $('dev-hint').textContent = '用手指在药盘里来回划，让药水流动';
+      if (!ok && state.dev < 0.9) setStatus('dev-hint', '用指尖轻轻划过药液');
     });
-    state.lastTs = 0;
-    state.developing = true;
     state.raf = requestAnimationFrame(tick);
   }
 
@@ -921,9 +941,9 @@
     state.agi += (state.agiTarget - state.agi) * Math.min(1, dt * 8);
     state.agiTarget *= Math.pow(0.05, dt);
 
-    state.dev = Math.min(2, state.dev + dt * (BASE_RATE + AGITATE_RATE * state.agi));
     state.devTime += dt;
-    state.agiSum += state.agi * dt;
+    state.dev = Math.min(2, state.devTime * DEVELOP_RATE);
+    state.agiSum += Math.min(1, state.agi / 0.25) * dt;
 
     paintDevelop($('develop-canvas'), state.dev);
 
@@ -984,6 +1004,7 @@
       var sweetCls = isSweet ? 'screen screen-develop is-sweet' : 'screen screen-develop';
       if (devScreen.className !== sweetCls) {
         devScreen.className = sweetCls;
+        if (isSweet) setStatus('dev-hint', '可以取出相纸');
         if (isSweet && state.sweetBuzzedRound !== state.round) {
           state.sweetBuzzedRound = state.round;
           Bridge.vibrate('light');
@@ -993,12 +1014,12 @@
 
     var pullBtn = $('pull-out');
     if (state.dev > 0.25) pullBtn.disabled = false;
-    // 画面差不多成形时「捞出来」才升为主按钮，之前不催用户
+    // 影像初步显出后允许取出，到自然影调时突出按钮。
     var pullCls = state.dev > 0.8 ? 'btn btn-primary' : 'btn btn-ghost';
     if (pullBtn.className !== pullCls) pullBtn.className = pullCls;
     var hint = $('dev-hint');
-    if (state.dev > 1.35 && hint.textContent !== '再不捞，就只剩轮廓了') {
-      hint.textContent = '再不捞，就只剩轮廓了';
+    if (state.dev > 1.35 && hint.textContent !== '影调已深，可以取出相纸') {
+      hint.textContent = '影调已深，可以取出相纸';
     }
 
     state.raf = requestAnimationFrame(tick);
@@ -1059,13 +1080,13 @@
     tray.style.touchAction = 'none';
     // 只跟踪第一根手指：多指各自的坐标混在一起会算出虚高的流动速度
     tray.addEventListener('pointerdown', function (e) {
-      if (last) return;
+      if (!state.developing || last) return;
       last = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
       spawnRipple(e.clientX, e.clientY, true);
       if (tray.setPointerCapture) { try { tray.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ } }
     });
     tray.addEventListener('pointermove', function (e) {
-      if (!last || e.pointerId !== last.id) return;
+      if (!state.developing || !last || e.pointerId !== last.id) return;
       var dt = Math.max(1, e.timeStamp - last.t);
       var dist = Math.sqrt(Math.pow(e.clientX - last.x, 2) + Math.pow(e.clientY - last.y, 2));
       state.agiTarget = Math.max(state.agiTarget, clamp01((dist / dt) * 1000 / 1500));
@@ -1078,7 +1099,8 @@
   }
 
   function pullOut() {
-    if ($('pull-out').disabled) return;
+    if (!state.developing || $('pull-out').disabled) return;
+    $('pull-out').disabled = true;
     stopDevelopLoop();
     var devScreen = $('screen-develop');
     if (devScreen) devScreen.className = 'screen screen-develop';
@@ -1094,15 +1116,22 @@
     if (fixTray) fixTray.classList.remove('is-fixed');
     if (fixRed) fixRed.style.opacity = '';
     $('fix-fill').style.width = '0';
-    $('fix-text').textContent = '按住定影 4 秒';
-    $('fix-hint').textContent = '';
+    $('fix-text').textContent = '长按定影 · 4 秒';
+    setStatus('fix-hint', '停显…');
     $('fix-hold').hidden = false;
+    $('fix-hold').disabled = true;
     $('fix-hold').className = 'btn btn-hold';
     $('lights-on').className = 'btn btn-ghost';
     $('lights-on').hidden = true;
     $('step-fix').className = 'is-on';
     $('step-light').className = '';
+    $('screen-fix').className = 'screen screen-fix is-stopping';
     show('fix');
+    setTimeout(function () {
+      $('screen-fix').className = 'screen screen-fix';
+      setStatus('fix-hint', '');
+      $('fix-hold').disabled = false;
+    }, STOP_BATH_MS);
   }
 
   /* ---------- 定影：按住计时 ---------- */
@@ -1122,28 +1151,27 @@
         holdBy = null;
         if (fixTray) fixTray.classList.add('is-fixed');
         btn.className = 'btn btn-hold is-done';
-        $('fix-text').textContent = '✓ 定影已完成';
-        $('fix-hint').textContent = '';
-        $('lights-on').textContent = '开灯';
-        $('lights-on').className = 'btn btn-ghost is-ready';
-        $('lights-on').hidden = false;
+        btn.disabled = true;
+        $('fix-text').textContent = '定影完成';
+        setStatus('fix-hint', '水洗相纸…');
+        $('screen-fix').className = 'screen screen-fix is-washing';
         $('step-fix').className = 'is-done';
         $('step-light').className = 'is-on';
-        fitTrays();
         Bridge.vibrate('light');
+        setTimeout(lightsOn, WASH_MS);
         return;
       }
       var leftSec = Math.max(1, Math.ceil((1 - state.fix) * FIX_SECONDS));
       if (leftSec !== state.lastFixSec) {
         state.lastFixSec = leftSec;
-        $('fix-text').textContent = '定影中 ' + leftSec + '…';
+        $('fix-text').textContent = '定影中 · ' + leftSec + ' 秒';
       }
       fixRaf = requestAnimationFrame(step);
     }
     // holdBy 记录是谁在按：pointerId，或键盘 'key'；其他手指的按下和抬起一律忽略
     var holdBy = null, fixRaf = 0;
     function startHold(by) {
-      if (state.fix >= 1 || state.fixHolding) return;
+      if (btn.disabled || state.fix >= 1 || state.fixHolding) return;
       holdBy = by;
       state.fixHolding = true;
       state.fixTimer = Date.now();
@@ -1164,12 +1192,7 @@
       cancelAnimationFrame(fixRaf);
       btn.className = 'btn btn-hold';
       if (state.fix < 1) {
-        $('fix-text').textContent = '继续按住';
-        $('fix-hint').textContent = '定影没做完，现在开灯可能留下斑';
-        $('lights-on').textContent = '就这样开灯';
-        $('lights-on').className = 'btn btn-ghost';
-        $('lights-on').hidden = false;
-        fitTrays();
+        $('fix-text').textContent = '继续长按';
       }
     }
     function endPointer(e) { if (e.pointerId === holdBy) release(); }
@@ -1199,12 +1222,6 @@
       if (k && k === holdBy) release();
     });
     btn.addEventListener('blur', function () { if (typeof holdBy === 'string') release(); });
-    // 开灯时若还按着，静默结束这次按压，不再改界面文字
-    endFixHold = function () {
-      state.fixHolding = false;
-      holdBy = null;
-      cancelAnimationFrame(fixRaf);
-    };
     // 切到后台时结束按压，回来不会把后台时间算进定影
     document.addEventListener('visibilitychange', function () { if (document.hidden) release(); });
     btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -1893,9 +1910,8 @@
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = !state.isNewMaterial;
     $('card-caption').className = 'card-caption is-visible';
-    $('card-tip').textContent = '倾斜看光 · 轻点翻面';
+    $('card-tip').textContent = '轻晃赏光 · 轻点看背面';
     updateBinderCounts();
-    fitCard();
 
     var saveBtn = $('save-card');
     if (saveBtn) {
@@ -1903,6 +1919,8 @@
       saveBtn.disabled = state.busy;   // 上一次保存还没结束时先不让点，结束后由 saveCard 重新启用
       saveBtn.className = 'btn btn-primary';
     }
+    $('card-save-options').hidden = false;
+    fitCard();
     var dot = $('open-card-dot');
     if (dot) dot.hidden = true;
 
@@ -1962,8 +1980,8 @@
     var card = $('holo-card');
     if (card) card.className = cardState.flipped ? 'holo-flipper is-flipped' : 'holo-flipper';
     $('card-tip').textContent = cardState.flipped
-      ? '轻点翻回正面'
-      : '倾斜看光 · 轻点翻面';
+      ? '轻点回到正面'
+      : '轻晃赏光 · 轻点看背面';
     Bridge.vibrate('light');
   }
 
@@ -2024,10 +2042,10 @@
     $('card-front-mat').textContent = meta.name;
     $('card-front-rarity').innerHTML = buildRarityMarkup(meta);
     $('card-back-no').textContent = isSample ? 'SAMPLE' : ('No.' + noPad);
-    $('card-back-date').textContent = isSample ? 'ARCHIVE' : (state.shotDate || '2026.11.19');
+    $('card-back-date').textContent = isSample ? 'ARCHIVE' : state.shotDate;
 
     var bt = $('card-back-title');
-    if (bt) bt.textContent = isSample ? ('暗房工艺样卡 · ' + meta.name) : (state.title || '刚刚好的一张');
+    if (bt) bt.textContent = isSample ? '暗房工艺样卡' : '冲印档案';
     var bm = $('card-back-mat');
     if (bm) bm.textContent = meta.name;
     var br = $('card-back-rarity');
@@ -2072,10 +2090,11 @@
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = true;
     $('card-caption').className = 'card-caption is-visible';
-    $('card-tip').textContent = '倾斜看光 · 轻点翻面';
+    $('card-tip').textContent = '轻晃赏光 · 轻点看背面';
 
     var saveBtn = $('save-card');
     $('card-framing-entry').hidden = true;
+    $('card-save-options').hidden = false;
     if (saveBtn) {
       resetSaveFeedback('save-card');
       saveBtn.hidden = false;
@@ -2110,6 +2129,7 @@
     $('close-card').setAttribute('aria-label', '返回卡册');
     $('open-binder-card').hidden = true;
     $('card-framing-entry').hidden = true;
+    $('card-save-options').hidden = true;
     var saveBtn = $('save-card');
     if (saveBtn) { saveBtn.hidden = true; saveBtn.disabled = true; }
     var backEl = $('holo-back');
@@ -2119,7 +2139,7 @@
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = true;
     $('card-caption').className = 'card-caption is-visible';
-    $('card-tip').textContent = '倾斜看光 · 轻点翻看档案卡背';
+    $('card-tip').textContent = '轻晃赏光 · 轻点看背面';
     var scene = $('holo-scene');
     if (scene) {
       scene.className = 'holo-scene';
@@ -2141,6 +2161,9 @@
     cardState.sampleMode = false;
     cardState.sampleMat = '';
     cardState.sampleReturn = null;
+    cardState.saveMode = 'face';
+    setChoice('card-save-options', cardState.saveMode);
+    $('card-save-options').hidden = true;
     $('close-card-label').textContent = '返回相纸';
     $('close-card').setAttribute('aria-label', '返回出片页');
     $('open-binder-card').hidden = false;
@@ -2240,10 +2263,10 @@
   }
 
   function setUnrevealedCardTip() {
-    var tip = '轻点翻开';
+    var tip = '轻触拆封';
     if (!$('card-framing-entry').hidden) {
       var side = state.photo.width / state.photo.height > Film.cardPhotoAspect ? '两侧' : '上下';
-      tip += ' · 小卡会裁去照片' + side;
+      tip += ' · 小卡会裁去照片' + side + '，可先调整取景';
     }
     $('card-tip').textContent = tip;
   }
@@ -2455,32 +2478,41 @@
     cardGyro.cb = null;
   }
 
-  /* ---------- 存这张小卡：卡背在后、正面在前的晒卡图 ---------- */
+  /* ---------- 小卡导出 ---------- */
   var RARITY_MARK = { R: '●', SR: '✦', SSR: '✦✦' };
 
-  function ensureCardShot() {
+  function captureCardLight() {
+    var still = isReducedMotion() || cardState.lowPerf;
+    var scene = $('holo-scene');
+    var width = scene.offsetWidth || 1;
+    var height = scene.offsetHeight || 1;
+    var rad = Math.PI / 180;
+    function clampOffset(offset) { return Math.max(-0.045, Math.min(0.045, offset)); }
+    return {
+      x: clamp01(cardState.lx / 100), y: clamp01(cardState.ly / 100),
+      strength: still ? 0.35 : Math.min(1, Math.max(cardState.on, Math.sqrt(cardState.rx * cardState.rx + cardState.ry * cardState.ry) / 12)),
+      scale: still ? 1 : 1.09,
+      dx: still ? 0 : clampOffset(-22 * Math.sin((cardState.ry + cardState.turn) * rad) / width),
+      dy: still ? 0 : clampOffset(22 * Math.sin(cardState.rx * rad) / height)
+    };
+  }
+
+  function ensureCardShot(mode, light) {
     var got = 0;
     MATERIALS.forEach(function (k) { if (state.collected.indexOf(k) >= 0) got += 1; });
-    // 图上印着收集进度：进度变了（比如存档迟到合并）就重新合成
-    if (state.cardShotPath && state.cardShotGot === got) return Promise.resolve(state.cardShotPath);
-    var round = state.round;
     var mat = state.material || 'rainbow';
     var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
     var no = 'No.' + pad(state.shotNo || state.count, 4);
-    var shot = Film.composePhotocard(state.photo, {
+    var compose = mode === 'both' ? Film.composePhotocard : Film.composeCardFace;
+    var shot = compose(state.photo, {
       photoBounds: cardState.photoBounds,
       material: mat, name: meta.name, rarity: meta.rarity, code: meta.code, mark: RARITY_MARK[meta.code] || '',
-      title: state.title || '刚刚好的一张',
+      light: light,
       origin: meta.origin,
       no: no, date: state.shotDate || '',
-      footer1: '暗房冲印店 · ' + meta.name + '（' + meta.rarity + '）',
-      footer2: no + '  ·  ' + (state.shotDate || '') + '  ·  已收集 ' + got + '/' + MATERIALS.length
+      collection: '已收集 ' + got + '/' + MATERIALS.length
     });
-    return Bridge.toTempFile(shot.toDataURL('image/jpeg', 0.92)).then(function (p) {
-      // 写临时文件期间已经换了一轮：这张属于上一轮，不能留给新一轮复用
-      if (round === state.round) { state.cardShotPath = p; state.cardShotGot = got; }
-      return p;
-    });
+    return Bridge.toTempFile(describePrint(shot).url);
   }
 
   var savedButtonFeedback = {};
@@ -2513,18 +2545,18 @@
     resetSaveFeedback('save-card');
     state.busy = true;
     btn.disabled = true;
-    $('card-tip').textContent = '正在存…';
-    // 让「正在存」先显示出来，再做较重的合成
+    $('card-tip').textContent = '正在保存小卡…';
     var round = state.round, seq = cardState.openSeq;
+    var mode = cardState.saveMode, light = captureCardLight();
     setTimeout(function () {
       // 合成放进 Promise 链：同步抛错也会走到失败分支，按钮和提示一定能恢复
-      Promise.resolve().then(ensureCardShot).then(Bridge.saveImage).then(function () {
+      Promise.resolve().then(function () { return ensureCardShot(mode, light); }).then(Bridge.saveImage).then(function () {
         if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
-        $('card-tip').textContent = '小卡存到相册了。';
-        showSaveFeedback('save-card', btn, '✓ 已珍藏');
+        $('card-tip').textContent = '已存入相册';
+        showSaveFeedback('save-card', btn, '已保存');
       }, function (err) {
         if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
-        $('card-tip').textContent = err && err.errMsg ? failText(err, '存小卡') : '小卡没合成出来，再点一次试试。';
+        $('card-tip').textContent = failText(err, '保存小卡');
       }).then(releaseBusy);
     }, 30);
   }
@@ -2533,7 +2565,7 @@
   function releaseBusy() {
     state.busy = false;
     var btn = $('save-card');
-    if (btn && cardState.open) btn.disabled = !cardState.revealed;
+    if (btn && cardState.open) btn.disabled = !cardState.revealed || cardState.sampleMode;
   }
 
   function bindCardInteraction() {
@@ -2608,28 +2640,38 @@
 
   /* ---------- 开灯出片 ---------- */
   function devLabel(dev) {
-    if (dev < 0.75) return { title: '淡得像一段回忆', tag: '欠显' };
-    if (dev < 0.9) return { title: '还差一口气', tag: '略欠' };
-    if (dev <= 1.12) return { title: '刚刚好的一张', tag: '刚好' };
-    if (dev <= 1.4) return { title: '浓了一点点', tag: '略过' };
-    return { title: '黑得只剩轮廓', tag: '过显' };
+    if (dev < 0.75) return '柔淡影调';
+    if (dev < 0.9) return '清浅影调';
+    if (dev <= 1.12) return '自然影调';
+    if (dev <= 1.4) return '浓郁影调';
+    return '深暗影调';
   }
 
-  function renderReportTags(items, isPerfect) {
-    var box = $('result-report');
-    box.innerHTML = '';
-    var visible = items.filter(function (text) { return !/^药水流动/.test(text); });
-    visible.forEach(function (text, idx) {
-      var span = document.createElement('span');
-      span.className = (isPerfect && idx === visible.length - 1) ? 'report-tag report-tag-ok' : 'report-tag';
-      span.textContent = idx === 0 ? text.replace(/^显影\s+/, '') : text;
-      box.appendChild(span);
-    });
+  function describePrint(canvas) {
+    var url = canvas.toDataURL('image/jpeg', 0.95);
+    if (url === 'data:,') throw new Error('Empty print');
+    return { url: url, width: canvas.width, height: canvas.height, path: '' };
+  }
+
+  function setChoice(id, mode) {
+    var options = $(id).querySelectorAll('button');
+    for (var i = 0; i < options.length; i++) {
+      options[i].setAttribute('aria-pressed', String(options[i].getAttribute('data-mode') === mode));
+    }
+  }
+
+  function showPrint(mode) {
+    if (!state.prints) return;
+    if (!state.prints[mode]) state.prints[mode] = describePrint(Film.composeCard(state.photo, state.cardInfo));
+    state.printMode = mode;
+    setChoice('print-options', mode);
+    $('result-img').src = state.prints[mode].url;
   }
 
   function openPreview(e) {
-    if (!state.cardUrl || previewState.open) return;
+    if (!state.prints || previewState.open) return;
     previewState.open = true;
+    previewState.printMode = state.printMode;
     previewState.opener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
       ? e.currentTarget : $('open-preview');
     var modal = $('preview-modal');
@@ -2639,10 +2681,10 @@
     previewState.lastTapTs = 0;
     clearTimeout(previewState.tapTimer);
     previewState.tapTimer = 0;
-    if (img) img.src = state.cardUrl;
+    if (img) img.src = state.prints[previewState.printMode].url;
     $('preview-compare').disabled = !state.base || !state.cardInfo;
     if (tip) {
-      tip.textContent = '双击放大看颗粒 · 轻点退出';
+      tip.textContent = '双击看细节 · 轻点返回';
       tip.className = 'preview-tip';
     }
     clearTimeout(previewState.tipTimer);
@@ -2663,8 +2705,8 @@
 
   function fitPreviewZoom() {
     var stage = $('preview-stage');
-    // 原底片和成片都用 composeCard 生成同规格的 3:4 相纸。
-    var fitted = Math.min(stage.clientWidth - 32, (stage.clientHeight - 16) * 3 / 4, 1080);
+    var print = state.prints[previewState.printMode];
+    var fitted = Math.min(stage.clientWidth - 32, (stage.clientHeight - 16) * print.width / print.height, print.width);
     stage.style.setProperty('--preview-zoom-width', Math.max(1, fitted * 1.9) + 'px');
   }
 
@@ -2706,18 +2748,18 @@
     if (!previewState.original) {
       var original;
       try {
-        original = Film.composeCard(state.base, state.cardInfo);
+        original = previewState.printMode === 'paper' ? Film.composeCard(state.base, state.cardInfo) : state.base;
       } catch (err) {
         var tip = $('preview-tip');
         clearTimeout(previewState.tipTimer);
         previewState.tipTimer = 0;
-        tip.textContent = '暂时无法查看原底片';
+        tip.textContent = '暂时无法查看冲印前的照片';
         tip.className = 'preview-tip';
         return;
       }
       original.className = 'preview-img';
       original.setAttribute('role', 'img');
-      original.setAttribute('aria-label', '原底片大图');
+      original.setAttribute('aria-label', '冲印前照片');
       $('preview-stage').appendChild(original);
       previewState.original = original;
     }
@@ -2776,11 +2818,12 @@
   }
 
   function lightsOn() {
-    if (state.busy) return;
-    endFixHold();
+    if (state.busy || state.fix < 1) return;
     state.busy = true;
     $('lights-on').disabled = true;
-    $('fix-hint').textContent = '开灯…';
+    $('lights-on').hidden = true;
+    $('screen-fix').className = 'screen screen-fix';
+    setStatus('fix-hint', '开灯见片…');
     var flash = $('light-flash');
     if (flash) {
       flash.className = 'light-flash';
@@ -2793,27 +2836,24 @@
     var avgAgi = state.devTime > 0 ? state.agiSum / state.devTime : 0;
     var params = {
       dev: state.dev,
-      uneven: clamp01(1 - avgAgi / 0.45),
+      uneven: clamp01(1 - avgAgi / 0.65),
       fix: state.fix,
-      leak: Math.random() < 0.3,
-      dust: Math.random() < 0.5
+      leak: false,
+      dust: false
     };
     // 等存档读回（最多 1.5 秒）再出片，编号和卡册才不会被迟到的读数覆盖
     saved.ready.then(function () { setTimeout(function () {
       try {
         var photo = Film.develop(state.base, params);
-        var label = devLabel(params.dev);
+        var print = describePrint(photo);
         var no = state.count + 1;
         var d = new Date();
         state.shotDate = d.getFullYear() + '.' + pad(d.getMonth() + 1, 2) + '.' + pad(d.getDate(), 2);
         var cardInfo = {
-          title: label.title,
           no: 'No.' + pad(no, 4),
-          date: state.shotDate,
-          footer: '暗房冲印店 · 暖调彩负'
+          date: state.shotDate
         };
-        var card = Film.composeCard(photo, cardInfo);
-        state.cardUrl = card.toDataURL('image/jpeg', 0.9);
+        state.prints = { clean: print, paper: null };
         state.cardInfo = cardInfo;
         // 成片生成成功才提交本轮：编号、小卡照片、收集
         state.photo = photo;   // 小卡正面用这张成片（canvas），不带白边
@@ -2825,82 +2865,66 @@
         state.material = pickMaterial();
         collectMaterial(state.material);
         state.isNewMaterial = state.collected.length > prevCollectedLen;
-        state.tempPath = '';
-        state.title = label.title;
-        $('result-img').src = state.cardUrl;
-        $('result-title').textContent = label.title;
-
-        var tags = [
-          '显影 ' + Math.round(state.devTime) + 's · ' + label.tag,
-          '药水流动 ' + Math.round(avgAgi * 100) + '%'
-        ];
-        var flaws = [];
-        if (params.leak) flaws.push('漏进了一点光');
-        if (params.uneven > 0.3) flaws.push('显影不匀');
-        if (params.dust) flaws.push('沾了灰');
-        if (params.fix < 1) flaws.push('定影斑');
-        if (flaws.length) {
-          flaws.forEach(function (f) { tags.push(f); });
-          renderReportTags(tags, false);
-        } else {
-          tags.push('一点瑕疵都没有');
-          renderReportTags(tags, true);
-        }
-
-        $('open-card-text').textContent = '拆一张暗房小卡';
+        showPrint('clean');
+        setStatus('result-report', '显影 ' + Math.round(state.devTime) + ' 秒 · ' + devLabel(params.dev) +
+          (params.uneven > 0.3 ? ' · 显影不均' : ''));
+        $('open-card-text').textContent = '拆封暗房小卡';
         $('open-card-dot').hidden = !state.isNewMaterial;
         updateBinderCounts();
 
-        setStatus('result-status', Bridge.inApp() ? '' : '在小红书里打开，才能存相册和发笔记。');
+        setStatus('result-status', Bridge.inApp() ? '' : '在小红书 App 内打开，即可存图与发布');
         show('result');
         document.querySelector('.result-scroll').scrollTop = 0;
+        $('result-title').focus();
       } catch (e) {
         clearFlash();
         document.body.className = '';
-        $('fix-hint').textContent = '这张没冲出来，再试一次吧';
+        setStatus('fix-hint', '暂时无法生成成片');
+        $('lights-on').hidden = false;
       }
       state.busy = false;
       $('lights-on').disabled = false;
     }, 60); });
   }
 
-  function ensureTempFile() {
-    if (state.tempPath) return Promise.resolve(state.tempPath);
-    return Bridge.toTempFile(state.cardUrl).then(function (p) { state.tempPath = p; return p; });
+  function ensureTempFile(print) {
+    if (print.path) return Promise.resolve(print.path);
+    return Bridge.toTempFile(print.url).then(function (p) { print.path = p; return p; });
   }
 
   function failText(err, action) {
-    if (err && err.errMsg === 'unsupported') return '这里' + action + '不了，请在小红书里打开。';
-    return action + '没成功，可能是没有相册权限，允许后再试一次。';
+    if (err && err.errMsg === 'unsupported') return '在小红书 App 内打开，即可存图与发布';
+    return action + '未完成，请再试一次';
   }
 
   function savePhoto() {
-    if (state.busy || !state.cardUrl) return;
+    if (state.busy || !state.prints) return;
     resetSaveFeedback('save-photo');
     var btn = $('save-photo');
     var label = btn.querySelector('span');
     state.busy = true;
     btn.disabled = true;
-    setStatus('result-status', '正在存…');
-    var round = state.round;
-    ensureTempFile().then(Bridge.saveImage).then(function () {
+    setStatus('result-status', '正在保存成片…');
+    var round = state.round, mode = state.printMode;
+    ensureTempFile(state.prints[mode]).then(Bridge.saveImage).then(function () {
       if (round !== state.round) return;
-      state.keptRound = round;   // 真的存进相册了，「再冲一张」不用再确认
-      if (label) showSaveFeedback('save-photo', label, '✓ 已存相册');
-      setStatus('result-status', '已经存到相册了。');
+      state.keptRound = round;
+      if (mode === state.printMode && label) showSaveFeedback('save-photo', label, '已存入相册');
+      var savedLabel = mode === 'paper' ? '暗房相纸' : '纯净成片';
+      setStatus('result-status', savedLabel + '已存入相册');
     }, function (err) {
       if (round === state.round) setStatus('result-status', failText(err, '存相册'));
     }).then(function () { releaseBusy(); btn.disabled = false; });
   }
 
   function postNote() {
-    if (state.busy || !state.cardUrl) return;
+    if (state.busy || !state.prints) return;
     state.busy = true;
     $('post-note').disabled = true;
     setStatus('result-status', '');
-    ensureTempFile().then(function (path) {
-      return Bridge.postNote(path, '我在暗房冲了一张照片',
-        '在「暗房冲印店」的红灯下，亲手冲洗了一张照片：' + state.title + '。\n晃得好不好，决定它最后长什么样。');
+    ensureTempFile(state.prints[state.printMode]).then(function (path) {
+      return Bridge.postNote(path, '在红灯下，等一张照片显影',
+        '挑了一张喜欢的照片，试了次模拟暗房冲印。相纸上的画面一点点显出来，开灯才看见完整的成片。\n#暗房冲印店 #胶片感调色');
     }).catch(function (err) {
       setStatus('result-status', failText(err, '发笔记'));
     }).then(function () { releaseBusy(); $('post-note').disabled = false; });
@@ -2912,11 +2936,11 @@
     resetSaveFeedback('save-photo');
     clearFlash();
     document.body.className = '';
-    state.base = null; state.cardUrl = ''; state.cardInfo = null; state.tempPath = ''; state.photo = null; state.material = '';
-    state.isNewMaterial = false; state.cardShotPath = ''; state.round += 1;
+    state.base = null; state.prints = null; state.cardInfo = null; state.photo = null; state.material = '';
+    state.isNewMaterial = false; state.round += 1;
     cardState.photoBounds = null;
     $('result-img').removeAttribute('src');
-    setStatus('intro-status', '再选一张照片吧。');
+    setStatus('intro-status', '');
     show('intro');
   }
 
@@ -2925,11 +2949,14 @@
      只认存相册成功（savePhoto 记下的 keptRound）；存失败、发笔记、存小卡都不算存了这张照片 */
   function bindAgainConfirm() {
     var btn = $('again'), armedUntil = 0, timer = 0;
-    var label = btn.querySelector('.again-text') || btn;   // 只换文字，不冲掉按钮里的图标
+    var label = btn.querySelector('.again-text') || btn;
+    var notice = '';
     function reset() {
       clearTimeout(timer); timer = 0; armedUntil = 0;
-      label.textContent = '再冲一张';
+      label.textContent = '再洗一张';
       btn.className = 'btn btn-again';
+      if (notice && $('result-status').textContent === notice) setStatus('result-status', '');
+      notice = '';
     }
     btn.addEventListener('click', function () {
       if (state.busy) return;   // 正在存或正在发：等它结束
@@ -2939,7 +2966,9 @@
         armedUntil = Date.now() + 3000;
         clearTimeout(timer);
         timer = setTimeout(reset, 3000);
-        label.textContent = unsaved ? '这张还没存，再点一次放弃' : '还有一张小卡没拆，再点一次放弃';
+        label.textContent = '确认离开';
+        notice = unsaved ? '成片尚未保存，再点离开' : '小卡尚未拆封，再点离开';
+        setStatus('result-status', notice);
         btn.className = 'btn btn-again again-confirm';
         return;
       }
@@ -2965,8 +2994,22 @@
     bindCardInteraction();
     bindCardFraming();
     bindModalFocusTrap();
+    $('print-options').addEventListener('click', function (e) {
+      var mode = e.target.getAttribute('data-mode');
+      if (mode !== 'clean' && mode !== 'paper') return;
+      try { showPrint(mode); }
+      catch (err) { setStatus('result-status', '暂时无法生成暗房相纸'); }
+    });
+    $('card-save-options').addEventListener('click', function (e) {
+      var mode = e.target.getAttribute('data-mode');
+      if (mode !== 'face' && mode !== 'both') return;
+      cardState.saveMode = mode;
+      setChoice('card-save-options', mode);
+    });
     $('pull-out').addEventListener('click', pullOut);
-    $('lights-on').addEventListener('click', lightsOn);
+    $('lights-on').addEventListener('click', function () {
+      if (!$('lights-on').hidden) lightsOn();
+    });
     $('open-card').addEventListener('click', openCard);
     $('close-card').addEventListener('click', function () {
       if (cardState.framing) closeCardFraming();
