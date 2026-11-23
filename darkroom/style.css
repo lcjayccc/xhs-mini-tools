@@ -48,6 +48,7 @@
   position: absolute !important; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0; opacity: 0;
 }
+#work-canvas { top: 0; left: 0; }
 [hidden] { display: none !important; }
 
 body {
@@ -77,17 +78,19 @@ body.is-lit .darkroom-grain { opacity: 0.028; }
    顶部物理安全灯（产品灵魂：红灯漫射 + 极克制灯条）
    ================================================================ */
 .safelight {
-  position: absolute; left: 0; right: 0; top: 0; height: 64%;
-  background: radial-gradient(ellipse at 50% -4%, rgba(255, 118, 86, 0.34) 0%, rgba(226, 58, 42, 0.44) 18%, rgba(168, 32, 22, 0.14) 48%, rgba(200, 48, 36, 0) 76%);
+  position: absolute; left: 0; right: 0; top: 0; height: 68%;
+  background:
+    radial-gradient(ellipse 46% 36% at 50% -4%, rgba(255, 134, 96, 0.38) 0%, rgba(226, 58, 42, 0.30) 34%, rgba(168, 32, 22, 0) 72%),
+    radial-gradient(ellipse 92% 72% at 50% 0%, rgba(196, 44, 30, 0.24) 0%, rgba(140, 24, 16, 0.08) 48%, rgba(140, 24, 16, 0) 78%);
   pointer-events: none;
   -webkit-transition: opacity 0.75s ease;
   transition: opacity 0.75s ease;
 }
 .safelight-lamp {
-  position: absolute; left: 50%; top: 0; width: 76px; height: 4px; margin-left: -38px;
-  background: linear-gradient(90deg, #d84434 0%, #ff9a7e 50%, #d84434 100%);
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 2px 16px 3px rgba(242, 82, 60, 0.56), 0 1px 4px rgba(255, 168, 136, 0.45);
+  position: absolute; left: 50%; top: 0; width: 84px; height: 5px; margin-left: -42px;
+  background: linear-gradient(90deg, #7c1f17 0%, #e85844 22%, #ffb094 50%, #e85844 78%, #7c1f17 100%);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 18px 4px rgba(242, 82, 60, 0.58), 0 1px 5px rgba(255, 178, 146, 0.50);
   -webkit-animation: lampBreath 4.2s ease-in-out infinite;
   animation: lampBreath 4.2s ease-in-out infinite;
 }
@@ -118,53 +121,62 @@ body.is-lit .safelight { opacity: 0; }
 /* ================================================================
    首屏
    ================================================================ */
-.screen-intro .topbar { padding: 20px 20px 8px; }
+.screen-intro .topbar { padding: 16px 20px 6px; }
 .intro-top-row {
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
   -webkit-box-pack: justify; justify-content: space-between;
-  min-height: 44px; margin-bottom: 8px; padding-right: calc(var(--capsule-right) - 20px);
+  min-height: 44px; margin-bottom: 10px; padding-right: calc(var(--capsule-right) - 20px);
 }
-.screen-intro .intro-title, .screen-intro .intro-sub, .intro-simulation {
+.screen-intro .intro-title, .screen-intro .intro-sub {
   text-align: center;
 }
-.screen-intro .intro-title { font-size: 30px; letter-spacing: 4px; }
-.intro-simulation { margin-top: 6px; color: var(--text-muted); font-size: 11px; letter-spacing: 1.8px; }
+.screen-intro .intro-title { font-size: 32px; letter-spacing: 5px; padding-left: 5px; }
+.screen-intro .intro-sub { margin-top: 8px; font-size: 13px; letter-spacing: 0.6px; color: var(--text-secondary); }
+.intro-rule {
+  display: block; width: 28px; height: 1px; margin: 10px auto 0;
+  background: linear-gradient(90deg, rgba(235, 194, 168, 0), rgba(235, 194, 168, 0.42), rgba(235, 194, 168, 0));
+}
 .brand-badge {
-  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; min-width: 0;
 }
 .intro-binder-btn {
-  height: 44px; padding: 0 12px; margin-left: 8px; flex-shrink: 0;
+  height: 36px; min-height: 44px; padding: 0 12px; margin-left: 8px; flex-shrink: 0;
   font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+  background: rgba(255, 232, 218, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 194, 0.16);
 }
 .lamp-dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: var(--r-pill);
+  display: inline-block; width: 6px; height: 6px; border-radius: var(--r-pill); flex-shrink: 0;
   background: var(--accent-red); margin-right: 8px;
+  box-shadow: 0 0 6px rgba(226, 68, 52, 0.65);
 }
 .brand-code {
   font-family: var(--font-mono);
-  font-size: 11px; letter-spacing: 1.5px; color: var(--text-muted);
+  font-size: 11px; letter-spacing: 1px; color: var(--text-muted);
 }
+.brand-code span { display: inline-block; white-space: nowrap; }
 
 .intro-tray {
   -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0;
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
-  padding: 8px 20px; overflow: hidden;
+  padding: 10px 20px; overflow: hidden;
 }
 .intro-actions { padding: 4px 20px 20px; text-align: center; }
 .intro-actions .btn { margin-top: 12px; }
 .intro-actions #pick-label { margin-top: 0; }
 .intro-actions .intro-sample-btn {
-  display: inline-flex; width: auto; min-height: 44px; height: 44px; margin: 2px auto 0; padding: 0 14px;
+  display: -webkit-inline-box; display: inline-flex; width: auto; min-height: 44px; height: 44px; margin: 4px auto 0; padding: 0 14px;
   background: transparent; color: var(--text-secondary); box-shadow: none; font-size: 13px; font-weight: 500;
 }
 .intro-sample-btn span { margin-left: 6px; font-size: 16px; }
-.intro-sample-btn:focus { box-shadow: inset 0 0 0 1px var(--text-secondary); }
-#pick-input:focus + #pick-label {
+.intro-sample-btn:focus { outline: none; box-shadow: none; }
+html.is-kbd .intro-sample-btn:focus { box-shadow: inset 0 0 0 1px var(--text-secondary); }
+html.is-kbd #pick-input:focus + #pick-label {
   box-shadow: inset 0 0 0 2px #fff7f2, 0 0 0 2px rgba(255, 200, 184, 0.55);
 }
 
 /* ================================================================
-   药盘与相纸（扁平化外框 + 高可见度多层液面）
+   立体暗房珐琅药盘与湿润相纸（物理盘壁坡面 + 暗房金属夹 + 多层液面）
    ================================================================ */
 .stage {
   -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0; position: relative;
@@ -175,18 +187,53 @@ body.is-lit .safelight { opacity: 0; }
 
 .tray {
   position: relative; width: 64%; max-width: 320px;
-  background: linear-gradient(168deg, #251310 0%, #160b09 100%);
-  border-radius: var(--r-md); padding: 12px;
-  border: 1px solid rgba(255, 214, 198, 0.14);
+  background: linear-gradient(164deg, #2d1814 0%, #1a0d0b 52%, #130908 100%);
+  border-radius: 14px; padding: 14px;
+  border: 1px solid rgba(255, 214, 198, 0.18);
   box-shadow:
-    inset 0 1px 0 rgba(255, 224, 210, 0.12),
-    inset 0 0 0 3px rgba(10, 4, 4, 0.48),
-    inset 0 12px 28px rgba(0, 0, 0, 0.64),
-    0 14px 32px rgba(0, 0, 0, 0.48);
+    inset 0 1.5px 0 rgba(255, 228, 214, 0.16),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.65),
+    inset 0 0 0 4px rgba(14, 6, 5, 0.62),
+    inset 0 14px 30px rgba(0, 0, 0, 0.72),
+    0 18px 38px rgba(0, 0, 0, 0.56);
   overflow: hidden;
 }
+.tray::before {
+  content: ""; position: absolute; left: 5px; top: 5px; right: 5px; bottom: 5px;
+  border-radius: 9px; pointer-events: none; z-index: 4;
+  border: 1px solid rgba(255, 224, 210, 0.08);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.45);
+}
 .tray-static {
-  width: 64%; max-width: 296px;
+  width: 66%; max-width: 304px; padding: 18px 16px 20px;
+}
+/* 首屏暗房金属夹 + 微倾白边湿相纸（消除亮蓝平板感，让样片真正浸在暗房里） */
+.tray-clip {
+  position: absolute; left: 50%; top: 5px; width: 34px; height: 12px; margin-left: -17px; z-index: 5;
+  border-radius: 3px 3px 2px 2px; pointer-events: none;
+  background: linear-gradient(180deg, #74645e 0%, #443733 58%, #2a201d 100%);
+  border: 1px solid rgba(255, 232, 220, 0.24);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 240, 230, 0.36);
+}
+.tray-clip::after {
+  content: ""; position: absolute; left: 50%; top: 4px; width: 12px; height: 2px; margin-left: -6px;
+  border-radius: 1px; background: rgba(18, 10, 9, 0.65);
+}
+.tray-paper.intro-paper-sheet {
+  padding: 6px 6px 18px; background: #f2ece2; border-radius: 3px;
+  -webkit-transform: rotate(-1.5deg); transform: rotate(-1.5deg);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.56), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.tray-paper.intro-paper-sheet canvas {
+  position: static; width: 100%; height: auto;
+  border-radius: 1px;
+}
+.intro-paper-wash {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 2; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(226, 68, 48, 0.32) 0%, rgba(180, 42, 28, 0.14) 48%, rgba(28, 12, 10, 0.22) 100%),
+    linear-gradient(180deg, rgba(255, 198, 166, 0.10) 0%, rgba(20, 10, 9, 0.14) 100%);
+  mix-blend-mode: multiply;
 }
 .tray-fix {
   background: #170d0c;
@@ -541,7 +588,8 @@ body.is-lit .safelight { opacity: 0; }
   transition: transform 0.12s var(--ease-out), box-shadow 0.14s var(--ease-out), background-color 0.16s var(--ease-out), color 0.16s var(--ease-out), border-color 0.16s var(--ease-out), opacity 0.15s var(--ease-out);
 }
 .btn:active { -webkit-transform: translateY(1px); transform: translateY(1px); }
-.btn:focus { outline: none; box-shadow: inset 0 0 0 2px rgba(255, 200, 184, 0.65); }
+.btn:focus { outline: none; }
+html.is-kbd .btn:focus { box-shadow: inset 0 0 0 2px rgba(255, 200, 184, 0.65); }
 .btn[disabled] { opacity: 0.38; cursor: default; -webkit-transform: none; transform: none; }
 .btn-ico { display: inline-block; margin-right: 7px; flex-shrink: 0; }
 
@@ -567,7 +615,7 @@ body.is-lit .safelight { opacity: 0; }
     0 1px 1px rgba(0, 0, 0, 0.24),
     0 0 0 transparent;
 }
-.btn-primary:focus {
+html.is-kbd .btn-primary:focus {
   box-shadow:
     inset 0 0 0 2px rgba(255, 240, 232, 0.85),
     inset 0 -1px 0 rgba(20, 6, 4, 0.34),
@@ -595,6 +643,10 @@ body.is-lit .safelight { opacity: 0; }
    定影长按按钮与开灯切换
    ================================================================ */
 .fix-actions { max-width: 320px; margin: 0 auto; }
+.fix-caption {
+  margin: 0 0 12px; font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 1.2px; color: var(--text-muted); text-align: center;
+}
 .btn-hold {
   position: relative; overflow: hidden;
   background: linear-gradient(180deg, #2d1a16 0%, #21120f 100%);
@@ -656,7 +708,7 @@ body.is-lit .safelight { opacity: 0; }
   color: var(--lit-text);
   box-shadow: inset 0 0 0 1px rgba(58, 38, 28, 0.18);
 }
-.screen-result .result-bar-binder:focus {
+html.is-kbd .screen-result .result-bar-binder:focus {
   box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45);
 }
 
@@ -714,8 +766,8 @@ body.is-lit .safelight { opacity: 0; }
   -webkit-appearance: none; appearance: none;
   border-radius: var(--r-paper);
 }
-.result-card-hit:focus {
-  outline: none;
+.result-card-hit:focus { outline: none; }
+html.is-kbd .result-card-hit:focus {
   box-shadow: 0 0 0 2px var(--lit-bg), 0 0 0 4px var(--lit-text);
 }
 
@@ -753,7 +805,9 @@ body.is-lit .safelight { opacity: 0; }
   background: #382420;
   box-shadow: inset 0 1px 0 rgba(255, 232, 218, 0.18), 0 1px 3px rgba(0, 0, 0, 0.36);
 }
-.export-options button:focus { outline: 2px solid currentColor; outline-offset: -2px; }
+.export-options button:focus { outline: none; }
+html.is-kbd .export-options button:focus::before { box-shadow: inset 0 0 0 2px rgba(255, 204, 188, 0.72); }
+html.is-kbd .screen-result .export-options button:focus::before { box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45); }
 .screen-result .export-options { color: #604c42; }
 .screen-result .export-options::before {
   background: rgba(58, 38, 28, 0.08);
@@ -769,30 +823,52 @@ body.is-lit .safelight { opacity: 0; }
 .result-btn-row {
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
 }
+/* 1:1 严格等宽对称主操作排 */
 .result-btn-row .btn {
   -webkit-box-flex: 1; flex: 1 1 0; min-width: 0; max-width: none;
-  margin: 0; height: 48px; border-radius: 12px; padding: 0 6px; font-size: 14px; white-space: nowrap;
+  margin: 0; height: 48px; border-radius: 12px; padding: 0 8px; font-size: 14px; white-space: nowrap;
 }
-.result-btn-row .btn:first-child { -webkit-box-flex: 1.25; flex-grow: 1.25; margin-right: 8px; }
-.result-secondary-row { margin-top: 8px; }
-.result-secondary-row .btn:first-child { -webkit-box-flex: 1.75; flex-grow: 1.75; }
+.result-btn-row .btn:first-child { margin-right: 10px; }
 
-/* 小卡入口：克制暖墨黑质感，本轮未拆时扫过一次流光 */
+/* 第二阶：通栏暗房黑金盲袋票券（内嵌极细暗金框线 + 右侧轻引导） */
 .btn-card-entry {
   position: relative; overflow: hidden;
-  font-weight: 600; letter-spacing: 0.6px;
+  width: 100%; height: 48px; margin-top: 10px; padding: 0 16px;
+  -webkit-box-pack: justify; justify-content: space-between;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.8px;
   color: #f6ede4;
-  background: linear-gradient(180deg, #2c211e 0%, #1d1513 100%);
-  box-shadow: inset 0 0 0 1px rgba(235, 202, 168, 0.26), inset 0 1px 0 rgba(255, 236, 214, 0.22), 0 4px 12px rgba(36, 22, 16, 0.16);
+  background: linear-gradient(180deg, #2e221e 0%, #1b1311 100%);
+  border: 1px solid #120c0b;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 234, 210, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    inset 0 0 0 transparent,
+    0 2px 4px rgba(36, 22, 16, 0.14),
+    0 6px 14px -4px rgba(36, 22, 16, 0.22);
+}
+.btn-card-entry::before {
+  content: ""; position: absolute; left: 4px; top: 4px; right: 4px; bottom: 4px;
+  border-radius: 8px; border: 1px solid rgba(242, 206, 158, 0.22); pointer-events: none;
 }
 .btn-card-entry:active {
-  background: #1a1210;
-  box-shadow: inset 0 0 0 1px rgba(235, 202, 168, 0.36);
+  background: linear-gradient(180deg, #1b1311 0%, #261b18 100%);
+  box-shadow:
+    inset 0 0 0 transparent,
+    inset 0 0 0 transparent,
+    inset 0 1px 2px rgba(0, 0, 0, 0.55),
+    0 1px 1px rgba(36, 22, 16, 0.16),
+    0 0 0 transparent;
+}
+.card-entry-left {
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
+}
+.card-entry-go {
+  font-size: 18px; line-height: 1; color: rgba(242, 206, 158, 0.82); font-weight: 400;
 }
 .btn-card-entry.is-shimmer::after {
   content: "";
   position: absolute; top: 0; bottom: 0; left: -60%; width: 45%;
-  background: linear-gradient(105deg, rgba(255, 244, 232, 0) 0%, rgba(255, 244, 232, 0.24) 50%, rgba(255, 244, 232, 0) 100%);
+  background: linear-gradient(105deg, rgba(255, 244, 232, 0) 0%, rgba(255, 236, 202, 0.24) 50%, rgba(255, 244, 232, 0) 100%);
   pointer-events: none;
   -webkit-animation: entryShimmer 0.9s var(--ease-out) 0.45s 1 forwards;
   animation: entryShimmer 0.9s var(--ease-out) 0.45s 1 forwards;
@@ -810,15 +886,18 @@ body.is-lit .safelight { opacity: 0; }
   margin-left: 8px; background: #e85848;
 }
 
+/* 第三阶：彻底去框轻量文字链 */
+.result-again-row { margin-top: 4px; text-align: center; }
 .btn-again {
-  font-weight: 500;
-  background: rgba(58, 38, 28, 0.03); color: #4a3931;
-  box-shadow: inset 0 0 0 1px rgba(58, 38, 28, 0.20);
+  display: -webkit-inline-box; display: inline-flex; width: auto; min-width: 112px;
+  height: 44px; padding: 0 16px; border-radius: var(--r-pill);
+  font-size: 13px; font-weight: 500;
+  background: transparent; color: #614e44; box-shadow: none;
 }
 .btn-again.again-confirm {
   color: var(--accent-red-active);
-  background: rgba(168, 41, 30, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(168, 41, 30, 0.45);
+  background: rgba(168, 41, 30, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(168, 41, 30, 0.32);
 }
 
 .screen-result .btn-ghost {
@@ -858,8 +937,8 @@ body.is-lit .safelight { opacity: 0; }
 .screen-result .btn-text.again-confirm { color: var(--accent-red-active); }
 .screen-result .status { color: var(--lit-secondary); margin-top: 8px; }
 .screen-result .status:empty { display: none; }
-.screen-result .btn:focus { box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45); }
-.screen-result .btn-card-entry:focus { box-shadow: inset 0 0 0 2px #f6ede4, 0 0 0 2px var(--lit-card-entry); }
+html.is-kbd .screen-result .btn:focus { box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45); }
+html.is-kbd .screen-result .btn-card-entry:focus { box-shadow: inset 0 0 0 2px #f6ede4, 0 0 0 2px var(--lit-card-entry); }
 
 /* ================================================================
    镭射小卡展示层（55×85 实体厚卡纸 + 主体避让分层，Chrome 61 兼容）
@@ -886,16 +965,20 @@ body.is-lit .safelight { opacity: 0; }
 }
 .card-bar-btn svg { margin-right: 5px; }
 .card-bar-btn:active { opacity: 0.72; }
-.card-bar-btn:focus { outline: none; box-shadow: inset 0 0 0 2px rgba(255, 200, 184, 0.65); }
+.card-bar-btn:focus { outline: none; }
+html.is-kbd .card-bar-btn:focus { box-shadow: inset 0 0 0 2px rgba(255, 200, 184, 0.65); }
 .card-bar-binder {
   margin-left: 8px; padding: 0 14px; font-size: 13px; color: var(--text-secondary);
 }
 
 .card-stage {
   -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0;
-  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  overflow: hidden; overflow: clip;
   display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column;
   padding: 8px 20px;
+}
+.card-stage.is-framing {
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
 }
 .card-stage-inner {
   margin: auto 0; width: 100%;
@@ -903,7 +986,7 @@ body.is-lit .safelight { opacity: 0; }
   -webkit-box-align: center; align-items: center;
 }
 .card-caption {
-  margin-top: 16px; min-height: 24px;
+  margin-top: 16px; min-height: 32px; line-height: 16px;
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
   opacity: 0; -webkit-transform: translateY(4px); transform: translateY(4px);
   -webkit-transition: opacity 0.32s var(--ease-out), -webkit-transform 0.32s var(--ease-out);
@@ -916,6 +999,7 @@ body.is-lit .safelight { opacity: 0; }
   font-size: 13px; color: var(--text-primary); letter-spacing: 0.3px;
 }
 .card-caption-new {
+  flex-shrink: 0; white-space: nowrap;
   margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: var(--r-pill);
   color: #fff2e8; background: var(--accent-red);
 }
@@ -927,6 +1011,11 @@ body.is-lit .safelight { opacity: 0; }
   padding: 8px 20px 20px; text-align: center;
 }
 .card-modal-actions .export-options { margin: 0 auto 2px; }
+/* 拆封前给保存选项留位，翻开时卡片与底栏不重排。 */
+.card-modal:not(.is-sample) #card-save-options[hidden] {
+  display: -webkit-inline-box !important; display: inline-flex !important;
+  visibility: hidden;
+}
 #save-card.is-pending { opacity: 0; pointer-events: none; }
 
 /* 3D 场景、地面落影、入场、分级揭晓光晕 */
@@ -1035,7 +1124,7 @@ body.is-lit .safelight { opacity: 0; }
 .holo-flipper.is-instant {
   -webkit-transition: none !important; transition: none !important;
 }
-.holo-flipper:focus {
+html.is-kbd .holo-flipper:focus {
   box-shadow: 0 0 0 2px rgba(255, 204, 186, 0.70);
 }
 .holo-flipper.is-flipped {
@@ -1120,22 +1209,24 @@ body.is-lit .safelight { opacity: 0; }
   pointer-events: none;
 }
 
-/* 右下角精致稀有度烫箔微章 + 左下极淡编号暗印 */
+/* 右下角精致稀有度烫箔微章 + 左下极淡编号暗印（严格留在烫箔框安全区内，绝不压线） */
 .holo-front-meta {
-  position: absolute; left: 12px; right: 12px; bottom: 11px; z-index: 6;
+  position: absolute; left: 16px; right: 16px; bottom: 14px; z-index: 6;
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
   -webkit-box-pack: justify; justify-content: space-between;
   pointer-events: none;
 }
+.holo-front[data-material="prism"] .holo-front-meta,
+.holo-front[data-material="noir"] .holo-front-meta { bottom: 30px; }
 .holo-front-no {
-  font-family: var(--font-mono);
-  font-size: 9px; letter-spacing: 0.8px; color: rgba(255, 246, 238, 0.66);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 9px; letter-spacing: 0.8px; color: rgba(255, 246, 238, 0.72);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.58);
 }
 .holo-front-badge {
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
-  padding: 3px 8px; border-radius: var(--r-pill);
-  background: rgba(16, 10, 10, 0.48);
+  padding: 3px 9px; border-radius: var(--r-pill);
+  background: rgba(16, 10, 10, 0.50);
   border: 1px solid rgba(255, 244, 232, 0.28);
   color: #fff6ed;
 }
@@ -1150,28 +1241,47 @@ body.is-lit .safelight { opacity: 0; }
 }
 .rarity-svg { display: block; margin-right: 2px; }
 
-/* 镂空烫箔微框与四角专属工艺微饰（6px 安全区内，绝不遮挡人物主体） */
+/* 镂空烫箔微框与 R / SR / SSR 分档高定装帧（6px 安全区内，绝不遮挡人物主体） */
 .holo-trim {
   position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px;
   border-radius: 6px; pointer-events: none; z-index: 5;
   border: 1px solid rgba(255, 248, 240, 0.24);
 }
+.trim-top-crest {
+  display: none; position: absolute; left: 50%; top: 7px;
+  -webkit-transform: translateX(-50%); transform: translateX(-50%);
+  padding: 1px 8px; border-radius: var(--r-pill);
+  font-family: var(--font-mono); font-size: 8px; font-weight: 600; letter-spacing: 1.8px;
+  white-space: nowrap;
+}
 .trim-corner { display: none; position: absolute; pointer-events: none; }
 
+/* SSR 1: 碎冰棱镜 —— 双层冰蓝紫烫箔框 + 顶部高定铭文 + 四角旋转菱花 + 渐变金属 SSR 徽章 */
 .holo-front[data-material="prism"] .holo-trim {
-  border: 1px solid rgba(154, 226, 255, 0.62);
-  box-shadow: inset 0 0 0 2px rgba(10, 18, 42, 0.35), inset 0 0 0 3px rgba(192, 148, 255, 0.42);
+  border: 1.5px solid rgba(164, 230, 255, 0.84);
+  box-shadow: inset 0 0 0 2.5px rgba(10, 18, 44, 0.42), inset 0 0 0 4px rgba(196, 152, 255, 0.56);
+}
+.holo-front[data-material="prism"] .trim-top-crest {
+  display: block;
+  background: rgba(11, 20, 50, 0.72);
+  border: 1px solid rgba(164, 230, 255, 0.62);
+  color: #dff4ff;
 }
 .holo-front[data-material="prism"] .trim-corner {
-  display: block; width: 6px; height: 6px; background: rgba(196, 242, 255, 0.92);
+  display: block; width: 8px; height: 8px;
+  background: linear-gradient(135deg, #e8f8ff, #9cd8ff);
+  box-shadow: 0 0 0 1px rgba(10, 18, 44, 0.55);
   -webkit-transform: rotate(45deg); transform: rotate(45deg);
 }
-.holo-front[data-material="prism"] .trim-tl { left: 5px; top: 5px; }
-.holo-front[data-material="prism"] .trim-tr { right: 5px; top: 5px; }
-.holo-front[data-material="prism"] .trim-bl { left: 5px; bottom: 5px; }
-.holo-front[data-material="prism"] .trim-br { right: 5px; bottom: 5px; }
+.holo-front[data-material="prism"] .trim-tl { left: 7px; top: 7px; }
+.holo-front[data-material="prism"] .trim-tr { right: 7px; top: 7px; }
+.holo-front[data-material="prism"] .trim-bl { left: 7px; bottom: 7px; }
+.holo-front[data-material="prism"] .trim-br { right: 7px; bottom: 7px; }
 .holo-front[data-material="prism"] .holo-front-badge {
-  background: rgba(12, 22, 54, 0.62); border-color: rgba(154, 226, 255, 0.56); color: #e2f4ff;
+  background: linear-gradient(135deg, rgba(16, 30, 74, 0.84) 0%, rgba(44, 24, 78, 0.84) 100%);
+  border-color: rgba(164, 230, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(226, 246, 255, 0.42), 0 2px 8px rgba(8, 16, 44, 0.45);
+  color: #eaf6ff;
 }
 
 .holo-front[data-material="rainbow"] .holo-trim {
@@ -1226,20 +1336,30 @@ body.is-lit .safelight { opacity: 0; }
 }
 
 /* --- 新增 3 种材质：镂空烫箔内框、四角微饰与右下角稀有度微章 --- */
+/* SSR 2: 暗房红印 —— 24K 鎏金朱砂双框 + 顶部高定铭文 + L 型金角花 + 黑金 SSR 徽章 */
 .holo-front[data-material="noir"] .holo-trim {
-  border: 1px solid rgba(244, 204, 132, 0.72);
-  box-shadow: inset 0 0 0 2px rgba(24, 8, 8, 0.45), inset 0 0 0 3px rgba(196, 52, 39, 0.50);
+  border: 1.5px solid rgba(246, 206, 134, 0.88);
+  box-shadow: inset 0 0 0 2.5px rgba(24, 8, 8, 0.48), inset 0 0 0 4px rgba(214, 58, 42, 0.62);
+}
+.holo-front[data-material="noir"] .trim-top-crest {
+  display: block;
+  background: rgba(34, 10, 9, 0.78);
+  border: 1px solid rgba(246, 206, 134, 0.70);
+  color: #fce4b4;
 }
 .holo-front[data-material="noir"] .trim-corner {
-  display: block; width: 12px; height: 12px;
-  border-color: #f4cc84; border-style: solid; border-width: 0;
+  display: block; width: 14px; height: 14px;
+  border-color: #f6ce86; border-style: solid; border-width: 0;
 }
-.holo-front[data-material="noir"] .trim-tl { left: 4px; top: 4px; border-top-width: 2px; border-left-width: 2px; }
-.holo-front[data-material="noir"] .trim-tr { right: 4px; top: 4px; border-top-width: 2px; border-right-width: 2px; }
-.holo-front[data-material="noir"] .trim-bl { left: 4px; bottom: 4px; border-bottom-width: 2px; border-left-width: 2px; }
-.holo-front[data-material="noir"] .trim-br { right: 4px; bottom: 4px; border-bottom-width: 2px; border-right-width: 2px; }
+.holo-front[data-material="noir"] .trim-tl { left: 6px; top: 6px; border-top-width: 2px; border-left-width: 2px; }
+.holo-front[data-material="noir"] .trim-tr { right: 6px; top: 6px; border-top-width: 2px; border-right-width: 2px; }
+.holo-front[data-material="noir"] .trim-bl { left: 6px; bottom: 6px; border-bottom-width: 2px; border-left-width: 2px; }
+.holo-front[data-material="noir"] .trim-br { right: 6px; bottom: 6px; border-bottom-width: 2px; border-right-width: 2px; }
 .holo-front[data-material="noir"] .holo-front-badge {
-  background: rgba(28, 10, 9, 0.72); border-color: rgba(244, 204, 132, 0.68); color: #fce4b4;
+  background: linear-gradient(135deg, rgba(46, 12, 10, 0.88) 0%, rgba(22, 8, 8, 0.88) 100%);
+  border-color: rgba(246, 206, 134, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 228, 174, 0.40), 0 2px 8px rgba(28, 6, 4, 0.50);
+  color: #fde8be;
 }
 
 .holo-front[data-material="cateye"] .holo-trim {
@@ -2368,9 +2488,12 @@ body.is-lit .app-toast:not(.is-dark) .app-toast-ico {
   .result-bar { padding: 8px var(--capsule-right) 2px 16px; }
   .result-scroll { padding: 4px 16px 12px; }
   .result-stage { padding: 2px 0 8px; }
+  .intro-rule { margin-top: 6px; }
   .result-card img { max-height: 38vh; }
-  .result-meta { margin: 0 0 7px; }
-  .result-btn-row .btn { height: 44px; font-size: 14px; }
+  .result-meta { margin: 0 0 6px; }
+  .result-btn-row .btn, .btn-card-entry { height: 44px; font-size: 14px; }
+  .btn-card-entry { margin-top: 8px; }
+  .result-again-row { margin-top: 2px; }
 
   .card-modal-bar { padding: 8px var(--capsule-right) 2px 16px; }
   .card-stage { padding: 4px 16px; }
@@ -2398,7 +2521,7 @@ body.is-lit .app-toast:not(.is-dark) .app-toast-ico {
   .binder-bar { padding: 4px var(--capsule-right) 2px 12px; }
   .card-bar-btn { height: 44px; font-size: 12px; padding: 0 10px 0 8px; }
   .card-stage { padding: 2px 16px; }
-  .card-caption { margin-top: 4px; min-height: 18px; }
+  .card-caption { margin-top: 4px; }
   .card-caption-text { font-size: 12px; }
   .card-tip { margin-top: 2px; font-size: 11px; }
   .card-modal-actions { padding: 2px 16px 6px; }

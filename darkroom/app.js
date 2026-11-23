@@ -223,12 +223,24 @@
       var stage = screen.querySelector(isIntro ? '.intro-tray' : '.stage');
       var tray = screen.querySelector('.tray');
       var paper = screen.querySelector('.tray-paper');
-      var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 16 : 24);
-      var hw = (sh - 24) / aspect + 24;
-      var w = Math.min(sw, hw, isIntro ? 304 : 360);
-      tray.style.width = Math.floor(Math.max(Math.min(isIntro ? 90 : 140, hw), w)) + 'px';
+      var stageStyle = window.getComputedStyle(stage);
+      var trayStyle = window.getComputedStyle(tray);
+      var roomWidth = stage.clientWidth - parseFloat(stageStyle.paddingLeft) - parseFloat(stageStyle.paddingRight);
+      var roomHeight = stage.clientHeight - parseFloat(stageStyle.paddingTop) - parseFloat(stageStyle.paddingBottom);
+      var insetsX = parseFloat(trayStyle.paddingLeft) + parseFloat(trayStyle.paddingRight) +
+        parseFloat(trayStyle.borderLeftWidth) + parseFloat(trayStyle.borderRightWidth);
+      var insetsY = parseFloat(trayStyle.paddingTop) + parseFloat(trayStyle.paddingBottom) +
+        parseFloat(trayStyle.borderTopWidth) + parseFloat(trayStyle.borderBottomWidth);
+      if (isIntro) {
+        var paperStyle = window.getComputedStyle(paper);
+        insetsX += parseFloat(paperStyle.paddingLeft) + parseFloat(paperStyle.paddingRight);
+        insetsY += parseFloat(paperStyle.paddingTop) + parseFloat(paperStyle.paddingBottom);
+      } else {
+        paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
+      }
+      var widthAtHeight = (roomHeight - insetsY) / aspect + insetsX;
+      tray.style.width = Math.max(1, Math.floor(Math.min(roomWidth, widthAtHeight, isIntro ? 304 : 360))) + 'px';
       tray.style.maxWidth = 'none';
-      paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
     });
   }
 
@@ -237,15 +249,15 @@
     var stage = $('card-stage');
     var scene = $('holo-scene');
     if (!stage || !scene) return;
-    var caption = $('card-caption');
-    var tip = $('card-tip');
-    var extraH = 22;
-    if (caption) extraH += Math.max(18, caption.offsetHeight) + 8;
-    if (tip) extraH += Math.max(16, tip.offsetHeight) + 6;
-    var sw = stage.clientWidth - 36;
-    var sh = stage.clientHeight - extraH;
-    var hw = sh * (55 / 85);
-    var w = Math.min(sw, hw, 316);
+    var style = window.getComputedStyle(stage);
+    var width = stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    // 预留少量空间，倾斜时卡角仍在舞台内。
+    var height = stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - 16;
+    ['card-caption', 'card-tip'].forEach(function (id) {
+      var text = $(id);
+      height -= text.offsetHeight + parseFloat(window.getComputedStyle(text).marginTop);
+    });
+    var w = Math.min(width, height * (55 / 85), 316);
     scene.style.width = Math.max(92, Math.floor(w)) + 'px';
   }
 
@@ -1757,6 +1769,8 @@
     $('card-front-no').textContent = isSample ? 'SAMPLE' : ('NO.' + noPad);
     $('card-front-mat').textContent = meta.name;
     $('card-front-rarity').innerHTML = buildRarityMarkup(meta);
+    var crestEl = $('card-front-crest');
+    if (crestEl) crestEl.textContent = meta.code === 'SSR' ? 'ARCHIVE · SSR' : '';
     $('card-back-no').textContent = isSample ? 'SAMPLE' : ('No.' + noPad);
     $('card-back-date').textContent = isSample ? 'ARCHIVE' : state.shotDate;
 
@@ -1825,6 +1839,7 @@
     if (previousCard) closeCard(true);
     closeBinder(true);
     cardState.sampleMode = true;
+    $('card-modal').classList.add('is-sample');
     cardState.sampleMat = mat;
     cardState.sampleReturn = { binderOpener: binderOpener, previousCard: previousCard, material: mat };
     cardState.openSeq = (cardState.openSeq || 0) + 1;
@@ -1875,6 +1890,7 @@
   function openCard(e, opts) {
     if (!state.photo) return;
     cardState.sampleMode = false;
+    $('card-modal').classList.remove('is-sample');
     cardState.sampleMat = '';
     cardState.sampleReturn = null;
     cardState.saveMode = 'face';
@@ -2076,6 +2092,7 @@
     stopCardLoop();
     stopCardGyro();
     cardState.framing = true;
+    $('card-stage').classList.add('is-framing');
     $('card-stage-inner').hidden = true;
     $('card-framing').hidden = false;
     $('open-binder-card').hidden = true;
@@ -2089,6 +2106,8 @@
   function closeCardFraming(silent) {
     if (!cardState.framing) return;
     cardState.framing = false;
+    $('card-stage').classList.remove('is-framing');
+    $('card-stage').scrollTop = 0;
     cardState.framingBounds = null;
     cardState.framingDrag = null;
     $('card-framing').hidden = true;
@@ -2378,9 +2397,17 @@
     }
   }
 
+  function buildPaperInfo() {
+    return {
+      no: state.cardInfo ? state.cardInfo.no : 'No.0001',
+      date: state.cardInfo ? state.cardInfo.date : '',
+      tone: state.toneName || ''
+    };
+  }
+
   function showPrint(mode) {
     if (!state.prints) return;
-    if (!state.prints[mode]) state.prints[mode] = describePrint(Film.composeCard(state.photo, state.cardInfo));
+    if (!state.prints[mode]) state.prints[mode] = describePrint(Film.composeCard(state.photo, buildPaperInfo()));
     state.printMode = mode;
     setChoice('print-options', mode);
     $('result-img').src = state.prints[mode].url;
@@ -2609,7 +2636,7 @@
     if (!previewState.original) {
       var original;
       try {
-        original = previewState.printMode === 'paper' ? Film.composeCard(state.base, state.cardInfo) : state.base;
+        original = previewState.printMode === 'paper' ? Film.composeCard(state.base, buildPaperInfo()) : state.base;
       } catch (err) {
         var tip = $('preview-tip');
         clearTimeout(previewState.tipTimer);
@@ -2851,6 +2878,14 @@
       setStatus('intro-status', '暗房没准备好，请退出后重新打开。');
       return;
     }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        document.documentElement.classList.add('is-kbd');
+      }
+    }, true);
+    document.addEventListener('pointerdown', function () {
+      document.documentElement.classList.remove('is-kbd');
+    }, true);
     avoidHostButtons();
     loadSaved();
     bindTrayRub();

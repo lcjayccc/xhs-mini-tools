@@ -359,41 +359,119 @@
     return out;
   }
 
-  /* 相纸卡片 1080x1440（小红书 3:4） */
+  /* 艺术馆精装手工相纸 1080x1440（小红书 3:4：棉纸微纤 + 版画压凹槽 + 朱砂暗房小印） */
   function composeCard(photo, info) {
-    var W = 1080, H = 1440, box = { x: 90, y: 70, w: 900, h: 1185 };
+    var W = 1080, H = 1440, box = { x: 96, y: 84, w: 888, h: 1126 };
     var c = makeCanvas(W, H), ctx = c.getContext('2d');
+
+    // 1. 暖象牙手工棉纸底色 + 纸面柔光暗角
     var paper = ctx.createLinearGradient(0, 0, W, H);
-    paper.addColorStop(0, '#f6f2ea'); paper.addColorStop(1, '#ece5d8');
-    ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
+    paper.addColorStop(0, '#f8f4ec');
+    paper.addColorStop(0.52, '#f3ede2');
+    paper.addColorStop(1, '#eae2d4');
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, W, H);
+
+    var vig = ctx.createRadialGradient(W * 0.5, H * 0.44, W * 0.18, W * 0.5, H * 0.5, H * 0.72);
+    vig.addColorStop(0, 'rgba(255, 253, 248, 0.28)');
+    vig.addColorStop(0.68, 'rgba(240, 232, 220, 0)');
+    vig.addColorStop(1, 'rgba(92, 68, 52, 0.10)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+
+    // 确定性棉纸纤维微纹理（零随机闪烁、离线毫秒级完成）
+    var seed = 20261123;
+    function nextRand() {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    }
+    for (var fi = 0; fi < 2200; fi += 1) {
+      var fx = nextRand() * W, fy = nextRand() * H;
+      var flen = 2 + nextRand() * 6;
+      ctx.fillStyle = (fi & 1) ? 'rgba(110, 88, 70, 0.026)' : 'rgba(255, 253, 248, 0.36)';
+      ctx.fillRect(fx, fy, flen, 1.2);
+    }
+
+    // 2. 画面光学居中 + 版画级压凹槽（Blind Deboss Plate Mark）
     var scale = Math.min(box.w / photo.width, box.h / photo.height);
     var pw = Math.round(photo.width * scale), ph = Math.round(photo.height * scale);
     var px = box.x + Math.round((box.w - pw) / 2);
-    // 画廊底锚式：横图/方图在上方画幅区光学居中，竖图贴合顶边，彻底消除底部死白
     var py = box.y + Math.round((box.h - ph) * 0.46);
+
+    var deboss = 18;
+    var dx = px - deboss, dy = py - deboss, dw = pw + deboss * 2, dh = ph + deboss * 2;
+    ctx.save();
+    ctx.fillStyle = 'rgba(250, 246, 238, 0.55)';
+    ctx.fillRect(dx, dy, dw, dh);
+    // 压凹上左暗边
+    ctx.strokeStyle = 'rgba(54, 38, 28, 0.14)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(dx + dw, dy + 0.75);
+    ctx.lineTo(dx + 0.75, dy + 0.75);
+    ctx.lineTo(dx + 0.75, dy + dh);
+    ctx.stroke();
+    // 压凹下右亮沿
+    ctx.strokeStyle = 'rgba(255, 253, 248, 0.84)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(dx + dw - 0.75, dy + 1);
+    ctx.lineTo(dx + dw - 0.75, dy + dh - 0.75);
+    ctx.lineTo(dx + 1, dy + dh - 0.75);
+    ctx.stroke();
+    ctx.restore();
+
+    // 绘制成片 + 嵌纸极细暗边
     ctx.drawImage(photo, px, py, pw, ph);
-    // 极细相纸压痕边，让照片自然嵌入纸面
-    ctx.strokeStyle = 'rgba(42, 29, 24, 0.08)';
+    ctx.strokeStyle = 'rgba(38, 26, 20, 0.10)';
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
-    // 横图/方图底部留出画廊呼吸后，用极细发丝线锚定落款区
-    if (py + ph < 1240) {
-      ctx.fillStyle = 'rgba(42, 29, 24, 0.09)';
-      ctx.fillRect(box.x, 1284, box.w, 1);
-    }
-    var textY = 1344;
-    ctx.fillStyle = '#241914';
+
+    // 3. 落款分割微线（与压凹槽宽对齐）
+    var footerLeft = box.x - deboss;
+    var footerRight = box.x + box.w + deboss;
+    var lineY = 1272;
+    ctx.fillStyle = 'rgba(54, 38, 28, 0.10)';
+    ctx.fillRect(footerLeft, lineY, footerRight - footerLeft, 1);
+
+    // 4. 左下：东方画廊朱砂暗房小方印 + 宋体店名 + 极细副标
+    var sealX = footerLeft, sealY = 1304, sealS = 44;
+    ctx.save();
+    roundRectPath(ctx, sealX, sealY, sealS, sealS, 5);
+    ctx.fillStyle = '#b63326';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 245, 236, 0.72)';
+    ctx.lineWidth = 1.6;
+    roundRectPath(ctx, sealX + 4, sealY + 4, sealS - 8, sealS - 8, 3);
+    ctx.stroke();
+    // 印章内极简暗房光圈图腾
+    var scx = sealX + sealS / 2, scy = sealY + sealS / 2;
+    ctx.strokeStyle = 'rgba(255, 245, 236, 0.88)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(scx, scy, 11, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff5ec';
+    ctx.beginPath(); ctx.arc(scx, scy, 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    var textX = sealX + sealS + 18;
     ctx.textBaseline = 'alphabetic';
-    ctx.font = '44px "Songti SC", "STSong", "SimSun", serif';
     ctx.textAlign = 'left';
-    ctx.fillText('暗房冲印店', box.x, textY);
-    ctx.fillStyle = '#6c584e';
-    ctx.font = '26px "SF Mono", Menlo, Consolas, monospace';
+    ctx.fillStyle = '#241914';
+    ctx.font = '600 36px "Songti SC", "STSong", "SimSun", serif';
+    ctx.fillText('暗房冲印店', textX, 1335);
+    ctx.fillStyle = '#756055';
+    ctx.font = '18px ' + MONO;
+    ctx.fillText('DARKROOM LAB · PRINT', textX, 1366);
+
+    // 5. 右下：编号日期 + 影调风味（严格齐平压凹槽右缘）
     ctx.textAlign = 'right';
-    ctx.fillText(info.no.toUpperCase() + ' · ' + info.date, box.x + box.w, textY);
-    ctx.textAlign = 'left';
+    ctx.fillStyle = '#4e3c33';
     ctx.font = '22px ' + MONO;
-    ctx.fillText('DARKROOM LAB · PRINT', box.x, textY + 42);
+    ctx.fillText((info.no || 'NO.0001').toUpperCase() + '  ·  ' + (info.date || ''), footerRight, 1334);
+    ctx.fillStyle = '#7c665b';
+    ctx.font = '18px "Songti SC", "STSong", "SimSun", serif';
+    ctx.fillText(info.tone ? (info.tone + ' · 模拟放相') : '模拟放相 · 暗房印记', footerRight, 1366);
+
     return c;
   }
 
@@ -565,34 +643,104 @@
     ctx.fillStyle = glare; ctx.fillRect(-w / 2, -h / 2, w, h);
     ctx.globalCompositeOperation = 'source-over';
 
-    // 材质专属镂空烫箔内框（6px 安全区内，不切割人像）
-    ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.72; ctx.lineWidth = 2;
+    // R / SR / SSR 分档高定装帧（按卡宽等比缩放，独立卡面与双面晒卡比例一致、绝不压线）
+    var s = w / 440;
+    var isSSR = info.code === 'SSR';
+    var isSR = info.code === 'SR';
+    ctx.strokeStyle = paint.trim;
+    ctx.globalAlpha = isSSR ? 0.88 : (isSR ? 0.76 : 0.56);
+    ctx.lineWidth = (isSSR ? 2.4 : 1.8) * s;
     roundRectPath(ctx, -w / 2 + trimInset, -h / 2 + trimInset, w - trimInset * 2, h - trimInset * 2, trimRadius);
     ctx.stroke();
-    ctx.globalAlpha = 1;
 
-    // 左下极淡编号 + 右下角精致稀有度微章
-    var metaY = h / 2 - 30;
+    if (isSSR || isSR) {
+      var innerInset = trimInset + Math.round(6 * s);
+      ctx.globalAlpha = isSSR ? 0.54 : 0.34;
+      ctx.lineWidth = 1.1 * s;
+      roundRectPath(ctx, -w / 2 + innerInset, -h / 2 + innerInset, w - innerInset * 2, h - innerInset * 2, Math.max(4, trimRadius - 4 * s));
+      ctx.stroke();
+    }
+
+    // SSR 专属：顶部 ARCHIVE · SSR 高定浮雕铭文 + 四角装饰角花
+    ctx.globalAlpha = 1;
+    if (isSSR) {
+      var crestW = Math.round(138 * s), crestH = Math.round(22 * s);
+      var crestY = -h / 2 + trimInset + Math.round(10 * s);
+      roundRectPath(ctx, -crestW / 2, crestY, crestW, crestH, crestH / 2);
+      ctx.fillStyle = info.material === 'noir' ? 'rgba(34,10,9,0.78)' : 'rgba(11,20,50,0.74)';
+      ctx.fill();
+      ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.72; ctx.lineWidth = 1.1 * s; ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = info.material === 'noir' ? '#fce4b4' : '#dff4ff';
+      ctx.font = '600 ' + Math.round(11 * s) + 'px ' + MONO;
+      ctx.fillText('ARCHIVE · SSR', 0, crestY + Math.round(15 * s));
+
+      var cOff = trimInset + Math.round(11 * s);
+      var cArm = Math.round(14 * s);
+      ctx.strokeStyle = paint.trim;
+      ctx.lineWidth = 2.2 * s;
+      var corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+      for (var ci = 0; ci < 4; ci += 1) {
+        var sx2 = corners[ci][0], sy2 = corners[ci][1];
+        var cx2 = sx2 * (w / 2 - cOff), cy2 = sy2 * (h / 2 - cOff);
+        if (info.material === 'prism') {
+          var dr = 5.5 * s;
+          ctx.fillStyle = '#dff4ff';
+          ctx.beginPath();
+          ctx.moveTo(cx2, cy2 - dr); ctx.lineTo(cx2 + dr, cy2);
+          ctx.lineTo(cx2, cy2 + dr); ctx.lineTo(cx2 - dr, cy2);
+          ctx.closePath(); ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(cx2 - sx2 * cArm, cy2);
+          ctx.lineTo(cx2, cy2);
+          ctx.lineTo(cx2, cy2 - sy2 * cArm);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 左下编号 + 右下稀有度微章（严格留在安全区内，彻底避开内框圆弧）
+    var safeX = trimInset + Math.round(18 * s);
+    var safeY = trimInset + Math.round((isSSR ? 26 : 16) * s);
+    var bh = Math.round(34 * s);
+    var by = h / 2 - safeY - bh;
+
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(255,246,238,0.68)'; ctx.font = '16px ' + MONO;
-    ctx.fillText(info.no.toUpperCase(), -w / 2 + 26, metaY);
+    ctx.fillStyle = 'rgba(255,246,238,0.74)';
+    ctx.font = Math.round(14 * s) + 'px ' + MONO;
+    ctx.fillText(info.no.toUpperCase(), -w / 2 + safeX, by + Math.round(bh * 0.68));
 
     var badgeText = info.name + '  ' + info.mark + ' ' + info.code;
-    ctx.font = '600 20px ' + SERIF;
-    var bw = Math.max(132, Math.round(ctx.measureText(badgeText).width + 30));
-    var bh = 36, bx = w / 2 - 24 - bw, by = h / 2 - 22 - bh;
+    ctx.font = '600 ' + Math.round(17 * s) + 'px ' + SERIF;
+    var bw = Math.max(Math.round(122 * s), Math.round(ctx.measureText(badgeText).width + 28 * s));
+    var bx = w / 2 - safeX - bw;
     roundRectPath(ctx, bx, by, bw, bh, bh / 2);
-    ctx.fillStyle = 'rgba(16,10,10,0.56)'; ctx.fill();
-    ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.68; ctx.lineWidth = 1.5; ctx.stroke();
+    if (isSSR) {
+      var bgGrad = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
+      if (info.material === 'noir') {
+        bgGrad.addColorStop(0, 'rgba(48,12,10,0.88)'); bgGrad.addColorStop(1, 'rgba(20,8,8,0.88)');
+      } else {
+        bgGrad.addColorStop(0, 'rgba(16,30,74,0.86)'); bgGrad.addColorStop(1, 'rgba(44,24,78,0.86)');
+      }
+      ctx.fillStyle = bgGrad;
+    } else {
+      ctx.fillStyle = 'rgba(16,10,10,0.58)';
+    }
+    ctx.fill();
+    ctx.strokeStyle = paint.trim; ctx.globalAlpha = isSSR ? 0.85 : 0.68; ctx.lineWidth = (isSSR ? 1.8 : 1.4) * s; ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff6ed';
-    ctx.fillText(badgeText, bx + bw / 2, by + 25);
+    ctx.fillStyle = info.material === 'noir' ? '#fde8be' : '#fff6ed';
+    ctx.fillText(badgeText, bx + bw / 2, by + Math.round(bh * 0.68));
     ctx.restore();
 
-    // 卡纸切边高光
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5;
-    roundRectPath(ctx, -w / 2 + 0.75, -h / 2 + 0.75, w - 1.5, h - 1.5, r); ctx.stroke();
+    // 仅双面晒卡切圆角时描外缘高光；独立满版导出不描外白线
+    if (!fullBleed) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5;
+      roundRectPath(ctx, -w / 2 + 0.75, -h / 2 + 0.75, w - 1.5, h - 1.5, r); ctx.stroke();
+    }
   }
 
   function composeCardFace(photo, info) {
