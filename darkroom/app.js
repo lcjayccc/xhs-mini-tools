@@ -43,18 +43,35 @@
   var cardState = {
     open: false, binderOpen: false,
     flipped: true, revealed: false, revealing: false, revealTimer: 0,
-    revealedRound: -1, cardOpener: null, binderOpener: null,
+    revealedRound: -1, shimmerRound: -1, cardOpener: null, binderOpener: null,
     raf: 0, lastTs: 0,
     rx: 0, ry: 0, vx: 0, vy: 0,
     tx: 0, ty: 0, dragging: false, lastInputTs: 0,
     sweepStart: 0, sweeping: false,
     slowFrames: 0, lowPerf: false,
-    thumbs: {}
+    thumb: null
   };
 
+  var previewState = { open: false, opener: null, tipTimer: 0 };
+
   function show(name) {
+    if (name !== 'result' && previewState.open) closePreview(true);
     screens.forEach(function (s) { $('screen-' + s).hidden = s !== name; });
-    if (name !== 'result') fitTrays();
+    if (name !== 'result') {
+      fitTrays();
+    } else {
+      var openCardBtn = $('open-card');
+      if (openCardBtn) {
+        if (!isCurrentRevealed() && cardState.shimmerRound !== state.round && !isReducedMotion()) {
+          cardState.shimmerRound = state.round;
+          openCardBtn.className = 'btn btn-card-entry';
+          void openCardBtn.offsetWidth;
+          openCardBtn.className = 'btn btn-card-entry is-shimmer';
+        } else {
+          openCardBtn.className = 'btn btn-card-entry';
+        }
+      }
+    }
   }
 
   function setStatus(id, text) { $(id).textContent = text || ''; }
@@ -575,7 +592,7 @@
       startDevelop(makePortraitSample());
     });
     $('use-sample').disabled = false;
-    setStatus('intro-status', '红灯亮了，开灯前看不清颜色。');
+    setStatus('intro-status', '');
   }
 
   /* ---------- 显影 ---------- */
@@ -592,7 +609,7 @@
     paintDevelop(canvas, 0);
 
     $('pull-out').disabled = true;
-    $('dev-hint').textContent = '晃一晃手机，让药水流过相纸';
+    $('dev-hint').textContent = '晃手机，或用手指划药盘';
     show('develop');
 
     // 每轮一个独立回调：旧轮迟到的失败只会注销它自己，不会误伤当前轮的订阅
@@ -648,37 +665,40 @@
 
     paintDevelop($('develop-canvas'), state.dev);
 
-    // 增强液体流动可见度：更明显的斜向波浪位移、轻微缩放与动态反光强度
+    // 增强液体流动可见度：更明显的斜向波浪位移、轻微缩放与动态反光强度（减少动态效果时保持静态液面）
+    var reduced = isReducedMotion();
     var liquid = $('tray-liquid');
     var tt = ts / 1000, amp = state.agi;
-    var tx = Math.sin(tt * 5.8) * (2.5 + amp * 13.5);
-    var ty = Math.cos(tt * 4.4) * (1.8 + amp * 9.5);
-    var sc = 1 + amp * 0.06;
-    var rot = Math.sin(tt * 3.2) * amp * 3.5;
-    liquid.style.transform = liquid.style.webkitTransform =
-      'translate(' + tx.toFixed(2) + '%,' + ty.toFixed(2) + '%) scale(' + sc.toFixed(3) + ') rotate(' + rot.toFixed(2) + 'deg)';
-    liquid.style.opacity = (0.36 + amp * 0.62).toFixed(2);
+    if (reduced) {
+      if (liquid.style.transform || liquid.style.webkitTransform) {
+        liquid.style.transform = liquid.style.webkitTransform = '';
+      }
+      if (liquid.style.opacity !== '0.42') liquid.style.opacity = '0.42';
+    } else {
+      var tx = Math.sin(tt * 5.8) * (2.5 + amp * 13.5);
+      var ty = Math.cos(tt * 4.4) * (1.8 + amp * 9.5);
+      var sc = 1 + amp * 0.06;
+      var rot = Math.sin(tt * 3.2) * amp * 3.5;
+      liquid.style.transform = liquid.style.webkitTransform =
+        'translate(' + tx.toFixed(2) + '%,' + ty.toFixed(2) + '%) scale(' + sc.toFixed(3) + ') rotate(' + rot.toFixed(2) + 'deg)';
+      liquid.style.opacity = (0.36 + amp * 0.62).toFixed(2);
+    }
 
-    // 晃动强烈时在药盘内自动激起轻柔波纹，让晃手机也有直观水感反馈
-    if (amp > 0.45 && !isReducedMotion()) {
+    // 晃动强烈时在药盘内自动激起轻柔波纹，直接用百分比坐标避免读布局
+    if (amp > 0.45 && !reduced) {
       var now = Date.now();
       if (now - state.lastSloshRippleTs > 320) {
         state.lastSloshRippleTs = now;
-        var trayEl = $('tray');
-        if (trayEl) {
-          var rect = trayEl.getBoundingClientRect();
-          var rx = rect.left + rect.width * (0.24 + Math.random() * 0.52);
-          var ry = rect.top + rect.height * (0.24 + Math.random() * 0.52);
-          spawnRipple(rx, ry, true);
-        }
+        spawnRipplePct(24 + Math.random() * 52, 24 + Math.random() * 52);
       }
     }
 
-    // 2 秒零晃动时的轻量手势微提示
+    // 2 秒零晃动时的轻量手势微提示（仅在状态变化时写 className）
     var guide = $('tray-guide');
     if (guide) {
       var shouldGuide = state.devTime > 1.8 && state.agiSum < 0.08 && amp < 0.12;
-      guide.className = shouldGuide ? 'tray-guide is-guiding' : 'tray-guide';
+      var guideCls = shouldGuide ? 'tray-guide is-guiding' : 'tray-guide';
+      if (guide.className !== guideCls) guide.className = guideCls;
     }
 
     // 用 GPU 合成 transform: scaleX 替代 width 避免重排
@@ -689,11 +709,19 @@
 
     var readoutBox = $('dev-readout');
     if (readoutBox) {
-      readoutBox.className = amp > 0.18 ? 'readout-box is-flowing' : 'readout-box';
+      var readoutCls = amp > 0.18 ? 'readout-box is-flowing' : 'readout-box';
+      if (readoutBox.className !== readoutCls) readoutBox.className = readoutCls;
     }
 
     var sec = Math.floor(state.devTime);
     $('dev-time').textContent = pad(Math.floor(sec / 60), 2) + ':' + pad(sec % 60, 2);
+
+    var devScreen = $('screen-develop');
+    if (devScreen) {
+      var isSweet = state.dev >= 0.9 && state.dev <= 1.12;
+      var sweetCls = isSweet ? 'screen screen-develop is-sweet' : 'screen screen-develop';
+      if (devScreen.className !== sweetCls) devScreen.className = sweetCls;
+    }
 
     var pullBtn = $('pull-out');
     if (state.dev > 0.25) pullBtn.disabled = false;
@@ -701,9 +729,9 @@
     var pullCls = state.dev > 0.8 ? 'btn btn-primary' : 'btn btn-ghost';
     if (pullBtn.className !== pullCls) pullBtn.className = pullCls;
     var hint = $('dev-hint');
-    if (state.dev > 1.35) hint.textContent = '再不捞，就只剩轮廓了';
-    else if (state.dev > 0.8) hint.textContent = '画面差不多成形了，你觉得呢？';
-    else if (state.dev > 0.3) hint.textContent = '影子出来了，继续晃';
+    if (state.dev > 1.35 && hint.textContent !== '再不捞，就只剩轮廓了') {
+      hint.textContent = '再不捞，就只剩轮廓了';
+    }
 
     state.raf = requestAnimationFrame(tick);
   }
@@ -719,6 +747,19 @@
   function stopAllGyro() {
     state.gyroCbs.forEach(function (cb) { Bridge.stopGyro(cb); });
     state.gyroCbs = [];
+  }
+
+  function spawnRipplePct(pctX, pctY) {
+    var box = $('tray-ripples');
+    if (!box) return;
+    var dot = document.createElement('span');
+    dot.className = 'tray-ripple';
+    dot.style.left = Math.round(pctX) + '%';
+    dot.style.top = Math.round(pctY) + '%';
+    box.appendChild(dot);
+    setTimeout(function () {
+      if (dot.parentNode) dot.parentNode.removeChild(dot);
+    }, 740);
   }
 
   function spawnRipple(clientX, clientY, force) {
@@ -771,6 +812,8 @@
   function pullOut() {
     if ($('pull-out').disabled) return;
     stopDevelopLoop();
+    var devScreen = $('screen-develop');
+    if (devScreen) devScreen.className = 'screen screen-develop';
     Bridge.vibrate('medium');
     var fixCanvas = $('fix-canvas'), devCanvas = $('develop-canvas');
     fixCanvas.width = devCanvas.width; fixCanvas.height = devCanvas.height;
@@ -779,8 +822,9 @@
     state.fix = 0;
     state.lastFixSec = 0;
     $('fix-fill').style.width = '0';
-    $('fix-text').textContent = '按住定影（4 秒）';
-    $('fix-hint').textContent = '按住不放，让定影液把画面固定下来';
+    $('fix-text').textContent = '按住定影 4 秒';
+    $('fix-hint').textContent = '';
+    $('fix-hold').hidden = false;
     $('fix-hold').className = 'btn btn-hold';
     $('lights-on').className = 'btn btn-ghost';
     $('lights-on').hidden = true;
@@ -803,7 +847,7 @@
         holdBy = null;
         btn.className = 'btn btn-hold is-done';
         $('fix-text').textContent = '✓ 定影已完成';
-        $('fix-hint').textContent = '画面已固定，可以开灯了';
+        $('fix-hint').textContent = '';
         $('lights-on').textContent = '开灯';
         $('lights-on').className = 'btn btn-ghost is-ready';
         $('lights-on').hidden = false;
@@ -816,7 +860,7 @@
       var leftSec = Math.max(1, Math.ceil((1 - state.fix) * FIX_SECONDS));
       if (leftSec !== state.lastFixSec) {
         state.lastFixSec = leftSec;
-        $('fix-text').textContent = '定影中… 还剩 ' + leftSec + ' 秒';
+        $('fix-text').textContent = '定影中 ' + leftSec + '…';
       }
       fixRaf = requestAnimationFrame(step);
     }
@@ -844,8 +888,8 @@
       cancelAnimationFrame(fixRaf);
       btn.className = 'btn btn-hold';
       if (state.fix < 1) {
-        $('fix-text').textContent = '继续按住定影';
-        $('fix-hint').textContent = '定影还没做完，现在开灯可能会留下斑';
+        $('fix-text').textContent = '继续按住';
+        $('fix-hint').textContent = '定影没做完，现在开灯可能留下斑';
         $('lights-on').textContent = '就这样开灯';
         $('lights-on').className = 'btn btn-ghost';
         $('lights-on').hidden = false;
@@ -978,6 +1022,7 @@
   }
 
   function getActiveModal() {
+    if (previewState.open) return $('preview-modal');
     if (cardState.binderOpen) return $('binder-modal');
     if (cardState.open) return $('card-modal');
     return null;
@@ -1016,7 +1061,8 @@
       if (!modal) return;
       if (e.key === 'Escape' || e.key === 'Esc') {
         e.preventDefault();
-        if (cardState.binderOpen) closeBinder();
+        if (previewState.open) closePreview();
+        else if (cardState.binderOpen) closeBinder();
         else closeCard();
         return;
       }
@@ -1176,7 +1222,7 @@
 
   function startCardLoop() {
     if (!cardState.open || cardState.binderOpen) return;
-    if (cardState.revealing && !cardState.revealed) finishReveal();
+    if (cardState.revealing && !cardState.revealed) { lightRevealAura(); finishReveal(); }
     if (cardState.raf) return;
     cardState.lastTs = 0;
     cardState.slowFrames = 0;
@@ -1229,28 +1275,14 @@
       if (has) {
         var isCurrent = !!(revealedNow && state.material && key === state.material);
         var card = document.createElement('div');
-        card.className = isCurrent ? 'pocket-card is-inspectable' : 'pocket-card';
+        card.className = 'pocket-card';
         card.setAttribute('data-material', key);
 
-        if (cardState.thumbs[key]) {
+        if (isCurrent && cardState.thumb && cardState.thumb.round === state.round && cardState.thumb.material === key && cardState.thumb.url) {
           var thumb = document.createElement('div');
           thumb.className = 'pocket-thumb';
-          thumb.style.backgroundImage = 'url("' + cardState.thumbs[key] + '")';
+          thumb.style.backgroundImage = 'url("' + cardState.thumb.url + '")';
           card.appendChild(thumb);
-        }
-
-        if (isCurrent) {
-          card.setAttribute('role', 'button');
-          card.setAttribute('tabindex', '0');
-          card.setAttribute('aria-label', '查看本次冲出的' + meta.name + '小卡');
-          card.addEventListener('click', function () {
-            if (cardState.open) {
-              closeBinder();
-            } else {
-              closeBinder(true);
-              openCard();
-            }
-          });
         }
 
         var head = document.createElement('div');
@@ -1283,6 +1315,26 @@
         card.appendChild(head);
         card.appendChild(center);
         card.appendChild(origin);
+
+        if (isCurrent) {
+          var hit = document.createElement('button');
+          hit.type = 'button';
+          hit.className = 'pocket-hit';
+          hit.setAttribute('aria-label', '查看本次冲出的' + meta.name + '小卡');
+          hit.addEventListener('click', function () {
+            if (cardState.open) {
+              showRevealedFront(false);
+              closeBinder();
+              fitCard();
+            } else {
+              var binderOpener = cardState.binderOpener;
+              closeBinder(true);
+              openCard(null, { alreadyRevealed: true, returnFocus: binderOpener || $('open-binder-result') });
+            }
+          });
+          card.appendChild(hit);
+        }
+
         pocket.appendChild(card);
       } else {
         var empty = document.createElement('div');
@@ -1344,23 +1396,26 @@
     cardState.revealedRound = state.round;
     cardState.flipped = false;
 
-    // 内存缓存本次冲出的缩略图供卡册展示（不写 localStorage）
+    // 内存缓存本次冲出的缩略图供卡册展示（绑定轮次+材质，不写 localStorage）
+    cardState.thumb = null;
     if (state.photo) {
       try {
         var tc = document.createElement('canvas');
         tc.width = 160; tc.height = 220;
         Film.drawCover(state.photo, tc);
-        cardState.thumbs[mat] = tc.toDataURL('image/jpeg', 0.72);
-      } catch (err) { /* 忽略 */ }
+        cardState.thumb = { round: state.round, material: mat, url: tc.toDataURL('image/jpeg', 0.72) };
+      } catch (err) { cardState.thumb = null; }
     }
 
+    var scene = $('holo-scene');
+    if (scene) scene.className = 'holo-scene';
     var card = $('holo-card');
     if (card) card.className = 'holo-flipper';
 
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = !state.isNewMaterial;
     $('card-caption').className = 'card-caption is-visible';
-    $('card-tip').textContent = '手指划动倾斜赏光 · 轻点翻看卡背';
+    $('card-tip').textContent = '倾斜看光 · 轻点翻面';
     updateBinderCounts();
     fitCard();
 
@@ -1403,10 +1458,18 @@
     $('holo-card').className = 'holo-flipper is-charging';
     cardState.revealTimer = setTimeout(function () {
       cardState.revealTimer = 0;
-      if (aura && tier === 'prism') aura.className = 'holo-aura is-prism';
-      else if (aura && tier === 'special') aura.className = 'holo-aura is-special';
+      lightRevealAura();
       finishReveal();
     }, tier === 'prism' ? 900 : (tier === 'special' ? 640 : 420));
+  }
+
+  /* 翻开那一刻点亮光晕：蓄力到时和「蓄力中被卡册打断、回来直接揭晓」两条路共用 */
+  function lightRevealAura() {
+    var aura = $('holo-aura');
+    if (!aura) return;
+    var tier = (MATERIAL_META[state.material || 'rainbow'] || MATERIAL_META.rainbow).tier;
+    if (tier === 'prism') aura.className = 'holo-aura is-prism';
+    else if (tier === 'special') aura.className = 'holo-aura is-special';
   }
 
   function toggleCardFlip() {
@@ -1419,7 +1482,7 @@
     if (card) card.className = cardState.flipped ? 'holo-flipper is-flipped' : 'holo-flipper';
     $('card-tip').textContent = cardState.flipped
       ? '轻点翻回正面'
-      : '手指划动倾斜赏光 · 轻点翻看卡背';
+      : '倾斜看光 · 轻点翻面';
     Bridge.vibrate('light');
   }
 
@@ -1448,41 +1511,75 @@
     updateBinderCounts();
   }
 
-  function openCard(e) {
+  function showRevealedFront(instant) {
+    var mat = state.material || 'rainbow';
+    var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
+    cardState.revealed = true;
+    cardState.revealing = false;
+    cardState.flipped = false;
+
+    var scene = $('holo-scene');
+    if (scene && !instant) scene.className = 'holo-scene';
+    var card = $('holo-card');
+    if (card) card.className = instant ? 'holo-flipper is-instant' : 'holo-flipper';
+    var aura = $('holo-aura');
+    if (aura) aura.className = 'holo-aura';
+
+    $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
+    $('card-caption-new').hidden = true;
+    $('card-caption').className = 'card-caption is-visible';
+    $('card-tip').textContent = '倾斜看光 · 轻点翻面';
+
+    var saveBtn = $('save-card');
+    if (saveBtn) {
+      saveBtn.disabled = state.busy;
+      saveBtn.className = 'btn btn-primary';
+    }
+  }
+
+  function openCard(e, opts) {
     if (!state.photo) return;
     cardState.openSeq = (cardState.openSeq || 0) + 1;   // 每次打开一个序号，存卡结果只回写发起它的那次
-    cardState.cardOpener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
-      ? e.currentTarget : document.activeElement;
+    var showFront = !!(opts && opts.alreadyRevealed && isCurrentRevealed());
+    if (opts && opts.returnFocus) {
+      cardState.cardOpener = opts.returnFocus;
+    } else {
+      cardState.cardOpener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
+        ? e.currentTarget : document.activeElement;
+    }
     renderCardContent();
     cardState.open = true;
-    cardState.revealed = false;
-    cardState.revealing = false;
-    cardState.flipped = true;
     cardState.sweeping = false;
     cardState.rx = 0; cardState.ry = 0; cardState.vx = 0; cardState.vy = 0;
     cardState.tx = 0; cardState.ty = 0; cardState.dragging = false; cardState.lastInputTs = 0;
     cardState.slowFrames = 0;
 
     var card = $('holo-card');
-    card.className = 'holo-flipper is-flipped is-instant';
-    var aura = $('holo-aura');
-    if (aura) aura.className = 'holo-aura';
-    $('card-caption').className = 'card-caption';
-    $('card-caption-text').textContent = '';
-    $('card-caption-new').hidden = true;
-    $('card-tip').textContent = '轻点翻开，看看冲出了什么材质';
-
-    var saveBtn = $('save-card');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.className = 'btn btn-primary is-pending';
+    if (showFront) {
+      showRevealedFront(true);
+    } else {
+      cardState.revealed = false;
+      cardState.revealing = false;
+      cardState.flipped = true;
+      card.className = 'holo-flipper is-flipped is-instant';
+      var aura = $('holo-aura');
+      if (aura) aura.className = 'holo-aura';
+      $('card-caption').className = 'card-caption';
+      $('card-caption-text').textContent = '';
+      $('card-caption-new').hidden = true;
+      $('card-tip').textContent = '点击翻开';
+      var saveBtn = $('save-card');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.className = 'btn btn-primary is-pending';
+      }
     }
 
     var scene = $('holo-scene');
     if (scene) {
       scene.className = 'holo-scene';
       void scene.offsetWidth;
-      scene.className = 'holo-scene is-entering';
+      scene.className = showFront ? 'holo-scene is-entering' : 'holo-scene is-entering is-floating';
     }
 
     $('card-modal').hidden = false;
@@ -1490,7 +1587,7 @@
     applyCardVisual(0, 0);
     // 解除无过渡锁，保证首次点击能平滑翻转
     void card.offsetWidth;
-    card.className = 'holo-flipper is-flipped';
+    card.className = showFront ? 'holo-flipper' : 'holo-flipper is-flipped';
     startCardLoop();
     startCardGyro();
     focusModal($('card-modal'), card);
@@ -1658,9 +1755,48 @@
     items.forEach(function (text, idx) {
       var span = document.createElement('span');
       span.className = (isPerfect && idx === items.length - 1) ? 'report-tag report-tag-ok' : 'report-tag';
-      span.textContent = text;
+      span.textContent = idx === 0 ? text.replace(/^显影\s+/, '') : text;
       box.appendChild(span);
     });
+  }
+
+  function openPreview(e) {
+    if (!state.cardUrl || previewState.open) return;
+    previewState.open = true;
+    previewState.opener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
+      ? e.currentTarget : $('open-preview');
+    var modal = $('preview-modal');
+    var img = $('preview-img');
+    var tip = $('preview-tip');
+    if (img) img.src = state.cardUrl;
+    if (tip) tip.className = 'preview-tip';
+    clearTimeout(previewState.tipTimer);
+    previewState.tipTimer = setTimeout(function () {
+      previewState.tipTimer = 0;
+      if (tip) tip.className = 'preview-tip is-faded';
+    }, 2000);
+    modal.hidden = false;
+    if (isReducedMotion()) {
+      modal.className = 'preview-modal is-open';
+    } else {
+      modal.className = 'preview-modal';
+      void modal.offsetWidth;
+      modal.className = 'preview-modal is-open';
+    }
+    focusModal(modal, $('close-preview'));
+  }
+
+  function closePreview(noFocus) {
+    if (!previewState.open) return;
+    previewState.open = false;
+    clearTimeout(previewState.tipTimer);
+    previewState.tipTimer = 0;
+    var modal = $('preview-modal');
+    modal.className = 'preview-modal';
+    modal.hidden = true;
+    var opener = previewState.opener;
+    previewState.opener = null;
+    if (noFocus !== true) restoreFocus(opener || $('open-preview'));
   }
 
   function lightsOn() {
@@ -1734,7 +1870,7 @@
           renderReportTags(tags, true);
         }
 
-        $('open-card-text').textContent = '领取暗房小卡';
+        $('open-card-text').textContent = '拆一张暗房小卡';
         $('open-card-dot').hidden = !state.isNewMaterial;
         updateBinderCounts();
 
@@ -1805,19 +1941,22 @@
      只认存相册成功（savePhoto 记下的 keptRound）；存失败、发笔记、存小卡都不算存了这张照片 */
   function bindAgainConfirm() {
     var btn = $('again'), armedUntil = 0, timer = 0;
+    var label = btn.querySelector('.again-text') || btn;   // 只换文字，不冲掉按钮里的图标
     function reset() {
       clearTimeout(timer); timer = 0; armedUntil = 0;
-      btn.textContent = '再冲一张';
-      btn.className = 'btn btn-text';
+      label.textContent = '再冲一张';
+      btn.className = 'btn btn-again';
     }
     btn.addEventListener('click', function () {
       if (state.busy) return;   // 正在存或正在发：等它结束
-      if (state.keptRound !== state.round && Date.now() > armedUntil) {
+      var unsaved = state.keptRound !== state.round;
+      var unopened = !isCurrentRevealed();   // 本轮的小卡还没拆
+      if ((unsaved || unopened) && Date.now() > armedUntil) {
         armedUntil = Date.now() + 3000;
         clearTimeout(timer);
         timer = setTimeout(reset, 3000);
-        btn.textContent = '这张还没存，再点一次放弃';
-        btn.className = 'btn btn-text again-confirm';
+        label.textContent = unsaved ? '这张还没存，再点一次放弃' : '还有一张小卡没拆，再点一次放弃';
+        btn.className = 'btn btn-again again-confirm';
         return;
       }
       reset();
@@ -1850,6 +1989,9 @@
     $('close-binder').addEventListener('click', closeBinder);
     $('save-photo').addEventListener('click', savePhoto);
     $('post-note').addEventListener('click', postNote);
+    $('open-preview').addEventListener('click', openPreview);
+    $('close-preview').addEventListener('click', function (e) { e.stopPropagation(); closePreview(); });
+    $('preview-modal').addEventListener('click', function () { closePreview(); });
     bindAgainConfirm();
     window.addEventListener('resize', function () {
       fitTrays();

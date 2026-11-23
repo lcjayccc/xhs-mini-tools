@@ -123,7 +123,10 @@ body.is-lit .safelight { opacity: 0; }
 }
 .intro-actions { padding: 4px 20px 20px; text-align: center; }
 .intro-actions .btn { margin-top: 12px; }
-.intro-actions .btn:first-child { margin-top: 0; }
+.intro-actions #pick-label { margin-top: 0; }
+#pick-input:focus + #pick-label {
+  box-shadow: inset 0 0 0 2px #fff7f2, 0 0 0 2px rgba(255, 200, 184, 0.55);
+}
 
 /* ================================================================
    药盘与相纸（扁平化外框 + 高可见度多层液面）
@@ -326,6 +329,41 @@ body.is-lit .safelight { opacity: 0; }
 .clock-dot {
   display: inline-block; width: 6px; height: 6px; border-radius: var(--r-pill);
   background: var(--accent-red); margin-right: 8px;
+  -webkit-animation: dotPulse 1.1s ease-in-out infinite;
+  animation: dotPulse 1.1s ease-in-out infinite;
+}
+@-webkit-keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.32; } }
+@keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.32; } }
+
+/* 显影进入「刚好」区间（0.9–1.12）：红点变慢、药盘边缘透暖光、捞出来按钮轻呼吸 */
+.screen-develop .tray {
+  -webkit-transition: border-color 0.45s ease, box-shadow 0.45s ease;
+  transition: border-color 0.45s ease, box-shadow 0.45s ease;
+}
+.screen-develop.is-sweet .clock-dot {
+  background: #f08a62;
+  -webkit-animation-duration: 2.4s;
+  animation-duration: 2.4s;
+}
+.screen-develop.is-sweet .tray {
+  border-color: rgba(255, 212, 168, 0.44);
+  box-shadow:
+    inset 0 0 18px rgba(255, 200, 145, 0.16),
+    inset 0 1px 0 rgba(255, 224, 185, 0.24),
+    inset 0 10px 24px rgba(0, 0, 0, 0.56),
+    0 12px 28px rgba(0, 0, 0, 0.44);
+}
+.screen-develop.is-sweet #pull-out {
+  -webkit-animation: pullBreath 1.6s ease-in-out infinite;
+  animation: pullBreath 1.6s ease-in-out infinite;
+}
+@-webkit-keyframes pullBreath {
+  0%, 100% { -webkit-transform: scale(1); opacity: 1; }
+  50% { -webkit-transform: scale(1.018); opacity: 0.86; }
+}
+@keyframes pullBreath {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.018); opacity: 0.86; }
 }
 .readout-time {
   font-family: var(--font-mono); font-size: 24px; line-height: 1.1; color: var(--text-primary);
@@ -350,6 +388,7 @@ body.is-lit .safelight { opacity: 0; }
 }
 .hint { margin: 12px 0 12px; font-size: 13px; line-height: 1.5; color: var(--text-primary); min-height: 20px; }
 .status { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); min-height: 18px; }
+.screen-intro .status:empty { display: none; }
 
 /* ================================================================
    按钮系统（零外发光、≥ 44px 触控热区、克制物理按压）
@@ -398,13 +437,11 @@ body.is-lit .safelight { opacity: 0; }
   -webkit-transform: scale(0.985); transform: scale(0.985);
   box-shadow: inset 0 0 0 1px rgba(255, 165, 145, 0.55);
 }
-.btn-hold.is-done {
-  height: 32px; font-size: 12px; font-weight: 400; color: var(--text-secondary);
-  background: transparent; box-shadow: none; pointer-events: none;
-  margin-bottom: 8px;
+.btn-hold.is-done { display: none; }
+.fix-warn {
+  margin: 10px 0 0; min-height: 0; font-size: 12px; color: var(--text-secondary);
 }
-.btn-hold.is-done .hold-fill { opacity: 0.14; }
-.btn-hold.is-done .hold-ico { display: none; }
+.fix-warn:empty { display: none; }
 
 .hold-fill {
   position: absolute; left: 0; top: 0; bottom: 0; width: 0;
@@ -414,7 +451,7 @@ body.is-lit .safelight { opacity: 0; }
   position: relative; z-index: 1;
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
 }
-#lights-on { margin-top: 12px; }
+#lights-on { margin-top: 10px; }
 #lights-on.is-ready {
   margin-top: 0;
   background: var(--accent-warm);
@@ -426,36 +463,55 @@ body.is-lit .safelight { opacity: 0; }
    开灯后的出片页（照片为主角，操作按直觉分层，对比度全面 ≥ 4.5:1）
    ================================================================ */
 .screen-result { color: var(--lit-text); }
+.result-bar {
+  flex-shrink: 0; position: relative; z-index: 2;
+  padding: 12px var(--capsule-right) 4px 16px;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
+}
+.screen-result .result-bar-binder {
+  padding: 0 14px;
+  background: var(--lit-surface);
+  color: var(--lit-text);
+  box-shadow: inset 0 0 0 1px rgba(58, 38, 28, 0.18);
+}
+.screen-result .result-bar-binder:focus {
+  box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45);
+}
+
 .result-scroll {
   -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
   display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column;
-  padding: 20px 20px 16px; text-align: center;
+  padding: 8px 20px 16px; text-align: center;
 }
 .result-inner { margin: auto 0; width: 100%; }
-.result-stage { padding: 4px 0 12px; }
+.result-stage { padding: 4px 0 10px; }
 .result-card {
+  position: relative;
   display: inline-block; max-width: 82%;
   background: var(--lit-surface); border-radius: var(--r-paper);
   box-shadow: 0 12px 32px rgba(45, 28, 18, 0.16), 0 2px 6px rgba(45, 28, 18, 0.08);
 }
-.result-card img { display: block; width: 100%; height: auto; max-height: 50vh; }
-
-.result-meta { margin: 8px 0 16px; }
-.result-kicker {
-  font-size: 11px; letter-spacing: 2px; color: var(--lit-secondary); margin-bottom: 8px;
+.result-card img { display: block; width: 100%; height: auto; max-height: 48vh; }
+.result-card-hit {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%; border: 0; padding: 0;
+  background: transparent; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  border-radius: var(--r-paper);
 }
+.result-card-hit:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lit-bg), 0 0 0 4px var(--lit-text);
+}
+
+.result-meta { margin: 6px 0 14px; }
 .result-report {
   margin: 0 auto; max-width: 320px;
-  font-size: 11px; color: var(--lit-secondary); line-height: 1.5;
+  font-size: 12px; color: var(--lit-secondary); line-height: 1.5;
 }
-.report-tag {
-  display: inline-block; margin: 3px 3px; padding: 3px 9px;
-  background: rgba(58, 38, 28, 0.06); border: 1px solid var(--lit-border);
-  border-radius: var(--r-sm); font-size: 11px; color: var(--lit-text);
-}
-.report-tag-ok {
-  background: rgba(46, 108, 62, 0.10); border-color: rgba(46, 108, 62, 0.24); color: #244d2e;
-}
+.report-tag { display: inline; font-size: 12px; color: var(--lit-secondary); }
+.report-tag + .report-tag::before { content: " · "; opacity: 0.6; }
+.report-tag-ok { color: #244d2e; font-weight: 500; }
 
 .result-actions { max-width: 320px; margin: 0 auto; }
 .result-btn-row {
@@ -466,27 +522,50 @@ body.is-lit .safelight { opacity: 0; }
 }
 .result-btn-row .btn:first-child { margin-right: 12px; }
 
-/* 小卡入口：克制暖墨黑质感，去掉廉价紫蓝渐变与外发光红点 */
+/* 小卡入口：克制暖墨黑质感，本轮未拆时扫过一次流光 */
 .btn-card-entry {
-  position: relative;
+  position: relative; overflow: hidden;
   height: 46px; margin-top: 12px; font-size: 14px; font-weight: 600; letter-spacing: 0.6px;
   color: #f6ede4;
   background: var(--lit-card-entry);
   box-shadow: inset 0 1px 0 rgba(255, 240, 230, 0.14);
+}
+.btn-card-entry.is-shimmer::after {
+  content: "";
+  position: absolute; top: 0; bottom: 0; left: -60%; width: 45%;
+  background: linear-gradient(105deg, rgba(255, 244, 232, 0) 0%, rgba(255, 244, 232, 0.24) 50%, rgba(255, 244, 232, 0) 100%);
+  pointer-events: none;
+  -webkit-animation: entryShimmer 0.9s var(--ease-out) 0.45s 1 forwards;
+  animation: entryShimmer 0.9s var(--ease-out) 0.45s 1 forwards;
+}
+@-webkit-keyframes entryShimmer {
+  0% { -webkit-transform: translateX(0); opacity: 1; }
+  100% { -webkit-transform: translateX(380%); opacity: 0; }
+}
+@keyframes entryShimmer {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(380%); opacity: 0; }
 }
 .entry-new-dot {
   display: inline-block; width: 6px; height: 6px; border-radius: var(--r-pill);
   margin-left: 8px; background: #e85848;
 }
 
-.result-sub-row {
-  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
-  margin-top: 4px;
+.result-again-row {
+  margin-top: 12px; text-align: center;
 }
-.result-sub-row .btn-text {
-  width: auto; max-width: none; margin: 0; padding: 0 14px; height: 44px; font-size: 13px;
+.btn-again {
+  display: -webkit-inline-box; display: inline-flex;
+  width: auto; max-width: 100%; min-width: 136px; height: 44px;
+  padding: 0 20px; border-radius: var(--r-pill);
+  font-size: 13px; font-weight: 500;
+  background: transparent; color: #4a3931;
+  box-shadow: inset 0 0 0 1px rgba(58, 38, 28, 0.22);
 }
-.sub-sep { color: var(--lit-secondary); font-size: 12px; opacity: 0.55; }
+.btn-again.again-confirm {
+  color: var(--accent-red-active);
+  box-shadow: inset 0 0 0 1px rgba(168, 41, 30, 0.45);
+}
 
 .screen-result .btn-ghost {
   background: var(--lit-surface);
@@ -495,8 +574,10 @@ body.is-lit .safelight { opacity: 0; }
 }
 .screen-result .btn-text { color: var(--lit-secondary); }
 .screen-result .btn-text.again-confirm { color: var(--accent-red-active); }
-.screen-result .status { color: var(--lit-secondary); margin-top: 4px; }
+.screen-result .status { color: var(--lit-secondary); margin-top: 8px; }
+.screen-result .status:empty { display: none; }
 .screen-result .btn:focus { box-shadow: inset 0 0 0 2px rgba(58, 38, 28, 0.45); }
+.screen-result .btn-card-entry:focus { box-shadow: inset 0 0 0 2px #f6ede4, 0 0 0 2px var(--lit-card-entry); }
 
 /* ================================================================
    镭射小卡展示层（55×85 实体厚卡纸 + 主体避让分层，Chrome 61 兼容）
@@ -581,6 +662,18 @@ body.is-lit .safelight { opacity: 0; }
 @keyframes cardEnter {
   0% { opacity: 0; transform: translateY(16px) scale(0.95); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.holo-scene.is-entering.is-floating {
+  -webkit-animation: cardEnter 0.32s var(--ease-out) both, cardFloat 3s ease-in-out 0.36s infinite;
+  animation: cardEnter 0.32s var(--ease-out) both, cardFloat 3s ease-in-out 0.36s infinite;
+}
+@-webkit-keyframes cardFloat {
+  0%, 100% { -webkit-transform: translateY(0); }
+  50% { -webkit-transform: translateY(-3px); }
+}
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 .holo-aura {
@@ -1163,8 +1256,17 @@ body.is-lit .safelight { opacity: 0; }
   -webkit-box-pack: justify; justify-content: space-between;
   overflow: hidden; text-align: left;
 }
-.pocket-card.is-inspectable { cursor: pointer; }
-.pocket-card.is-inspectable:active { opacity: 0.88; }
+.pocket-hit {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 5;
+  width: 100%; height: 100%; border: 0; padding: 0;
+  border-radius: var(--r-md); background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+}
+.pocket-hit:active { background: rgba(0, 0, 0, 0.14); }
+.pocket-hit:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px #f5e8e0, inset 0 0 0 4px var(--accent-red);
+}
 .pocket-card::before {
   content: ""; position: absolute; left: 4px; top: 4px; right: 4px; bottom: 4px;
   border-radius: var(--r-sm); border: 1px solid currentColor; opacity: 0.18; pointer-events: none;
@@ -1202,11 +1304,12 @@ body.is-lit .safelight { opacity: 0; }
 .pocket-head {
   display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: justify; justify-content: space-between;
   font-family: var(--font-mono);
-  font-size: 11px; opacity: 0.85; position: relative; z-index: 2;
+  font-size: 11px; position: relative; z-index: 2;
 }
+.pocket-head > span:first-child { opacity: 0.85; }
 .pocket-now {
   font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: var(--r-pill);
-  background: var(--accent-red); color: #fff7f2; opacity: 1;
+  background: var(--accent-red); color: #fff7f2;
 }
 .pocket-center { position: relative; z-index: 2; padding: 6px 0; }
 .pocket-name {
@@ -1242,6 +1345,49 @@ body.is-lit .safelight { opacity: 0; }
 /* ================================================================
    360×640 小屏与矮屏响应式收紧（4/8px 刻度，保证不挤压不裁切）
    ================================================================ */
+/* ================================================================
+   成片全屏预览层（页面内放大层，不使用 requestFullscreen）
+   ================================================================ */
+.preview-modal {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 50;
+  display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column;
+  padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+  background: rgba(10, 6, 6, 0.94);
+  color: var(--text-primary);
+  opacity: 0;
+  -webkit-transition: opacity 0.22s ease;
+  transition: opacity 0.22s ease;
+}
+.preview-modal.is-open { opacity: 1; }
+.preview-bar {
+  flex-shrink: 0;
+  padding: 12px var(--capsule-right) 4px 16px;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center;
+}
+.preview-close {
+  width: 44px; height: 44px; padding: 0;
+  -webkit-box-pack: center; justify-content: center;
+}
+.preview-close svg { margin-right: 0; }
+.preview-stage {
+  -webkit-box-flex: 1; flex: 1 1 auto; min-height: 0;
+  display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
+  padding: 12px 16px;
+}
+.preview-img {
+  display: block; max-width: 100%; max-height: 100%; width: auto; height: auto;
+  border-radius: var(--r-paper);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65);
+}
+.preview-tip {
+  flex-shrink: 0; text-align: center;
+  padding: 4px 16px 20px; font-size: 12px; color: var(--text-secondary);
+  opacity: 0.72;
+  -webkit-transition: opacity 0.45s ease;
+  transition: opacity 0.45s ease;
+}
+.preview-tip.is-faded { opacity: 0; }
+
 @media (max-height: 660px) {
   .topbar { padding: 12px var(--capsule-right) 4px 16px; }
   .screen-intro .topbar { padding-top: 12px; }
@@ -1257,13 +1403,14 @@ body.is-lit .safelight { opacity: 0; }
   .hint { margin: 8px 0 8px; font-size: 12px; }
   .status { margin-top: 6px; font-size: 11px; }
 
-  .result-scroll { padding: 12px 16px 12px; }
+  .result-bar { padding: 8px var(--capsule-right) 2px 16px; }
+  .result-scroll { padding: 4px 16px 12px; }
   .result-stage { padding: 2px 0 8px; }
-  .result-card img { max-height: 40vh; }
+  .result-card img { max-height: 38vh; }
   .result-meta { margin: 4px 0 10px; }
-  .result-kicker { margin-bottom: 4px; }
   .result-btn-row .btn { height: 44px; font-size: 14px; }
   .btn-card-entry { height: 44px; margin-top: 8px; }
+  .result-again-row { margin-top: 8px; }
 
   .card-modal-bar { padding: 8px var(--capsule-right) 2px 16px; }
   .card-stage { padding: 4px 16px; }
@@ -1279,11 +1426,15 @@ body.is-lit .safelight { opacity: 0; }
 }
 
 @media (max-height: 440px) {
-  .card-bar-btn { height: 36px; font-size: 12px; padding: 0 10px 0 8px; }
-  .card-caption { margin-top: 6px; min-height: 18px; }
+  .card-modal-bar { padding: 4px var(--capsule-right) 0 12px; }
+  .binder-bar { padding: 4px var(--capsule-right) 2px 12px; }
+  .card-bar-btn { height: 44px; font-size: 12px; padding: 0 10px 0 8px; }
+  .card-stage { padding: 2px 16px; }
+  .card-caption { margin-top: 4px; min-height: 18px; }
   .card-caption-text { font-size: 12px; }
   .card-tip { margin-top: 2px; font-size: 11px; }
-  .card-modal-actions .btn { height: 40px; font-size: 14px; }
+  .card-modal-actions { padding: 2px 16px 6px; }
+  .card-modal-actions .btn { height: 44px; font-size: 14px; }
   .holo-stock { padding: 6px 6px 0 6px; }
   .holo-front-meta { height: 28px; margin-top: 4px; }
   .holo-front-lab { display: none; }
@@ -1297,10 +1448,11 @@ body.is-lit .safelight { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .tray-static .tray-liquid, .tray-liquid-calm, .safelight-lamp, .light-flash.is-flashing, .tray-ripple, .tray-guide-dot,
-  .holo-scene.is-entering, .holo-aura.is-special, .holo-aura.is-prism {
+  .clock-dot, .screen-develop.is-sweet #pull-out, .btn-card-entry.is-shimmer::after,
+  .holo-scene.is-entering, .holo-scene.is-entering.is-floating, .holo-aura.is-special, .holo-aura.is-prism {
     -webkit-animation: none; animation: none;
   }
-  body, .safelight, .btn { -webkit-transition: none; transition: none; }
+  body, .safelight, .btn, .screen-develop .tray, .preview-modal, .preview-tip { -webkit-transition: none; transition: none; }
   .holo-flipper { -webkit-transition: none; transition: none; }
   .holo-flipper.is-flipped, .holo-flipper.is-charging { -webkit-transform: none; transform: none; }
   .holo-front {

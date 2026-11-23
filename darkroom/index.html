@@ -35,7 +35,7 @@
           <span class="brand-code">DARKROOM LAB · 35MM</span>
         </div>
         <h1 class="intro-title">暗房冲印店</h1>
-        <p class="intro-sub">选一张照片，在红灯下亲手冲洗出来。<br />晃得好不好，决定它最后长什么样。</p>
+        <p class="intro-sub">红灯下，亲手洗出你的胶片</p>
       </header>
 
       <div class="intro-tray" aria-hidden="true">
@@ -48,6 +48,7 @@
       </div>
 
       <div class="intro-actions">
+        <input type="file" id="pick-input" accept="image/*" class="visually-hidden" />
         <label class="btn btn-primary" id="pick-label" for="pick-input">
           <svg class="btn-ico" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
             <rect x="2" y="5" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -56,8 +57,7 @@
           </svg>
           <span>选一张照片</span>
         </label>
-        <input type="file" id="pick-input" accept="image/*" class="visually-hidden" />
-        <button type="button" class="btn btn-ghost" id="use-sample" disabled>先用示例底片试试</button>
+        <button type="button" class="btn btn-ghost" id="use-sample" disabled>试试示例底片</button>
         <p class="status" id="intro-status" role="status">正在点亮红灯…若长时间没有反应，请退出后重新打开。</p>
       </div>
     </section>
@@ -118,7 +118,6 @@
         </div>
       </div>
       <div class="panel panel-fix">
-        <p class="hint" id="fix-hint">按住不放，让定影液把画面固定下来</p>
         <div class="fix-actions">
           <button type="button" class="btn btn-hold" id="fix-hold">
             <span class="hold-fill" id="fix-fill"></span>
@@ -127,9 +126,10 @@
                 <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2"/>
                 <circle cx="10" cy="10" r="3.2" fill="currentColor"/>
               </svg>
-              <span class="hold-text" id="fix-text">按住定影</span>
+              <span class="hold-text" id="fix-text">按住定影 4 秒</span>
             </span>
           </button>
+          <p class="hint fix-warn" id="fix-hint"></p>
           <button type="button" class="btn btn-ghost" id="lights-on" hidden>开灯看看</button>
         </div>
       </div>
@@ -137,13 +137,26 @@
 
     <!-- 出片 -->
     <section class="screen screen-result" id="screen-result" hidden>
+      <header class="result-bar">
+        <button type="button" class="card-bar-btn result-bar-binder" id="open-binder-result" aria-label="打开暗房卡册">
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+            <rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <span>卡册 <span id="binder-count-result">0/6</span></span>
+        </button>
+      </header>
       <div class="result-scroll">
         <div class="result-inner">
           <div class="result-stage">
-            <div class="result-card"><img id="result-img" alt="冲洗出来的照片" /></div>
+            <div class="result-card">
+              <img id="result-img" alt="冲洗出来的照片" />
+              <button type="button" class="result-card-hit" id="open-preview" aria-label="全屏预览冲洗出来的照片"></button>
+            </div>
           </div>
           <div class="result-meta">
-            <p class="result-kicker">冲印回执</p>
             <p class="result-title visually-hidden" id="result-title">刚刚好的一张</p>
             <div class="result-report" id="result-report"></div>
           </div>
@@ -166,13 +179,16 @@
               <svg class="btn-ico" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
                 <path d="M10 2.5l1.6 4.7 4.9 1.6-4.9 1.6L10 15.1l-1.6-4.7-4.9-1.6 4.9-1.6L10 2.5z" fill="currentColor"/>
               </svg>
-              <span id="open-card-text">领取暗房小卡</span>
+              <span id="open-card-text">拆一张暗房小卡</span>
               <span class="entry-new-dot" id="open-card-dot" hidden aria-hidden="true"></span>
             </button>
-            <div class="result-sub-row">
-              <button type="button" class="btn btn-text" id="open-binder-result">暗房卡册 · <span id="binder-count-result">0/6</span></button>
-              <span class="sub-sep" aria-hidden="true">·</span>
-              <button type="button" class="btn btn-text" id="again">再冲一张</button>
+            <div class="result-again-row">
+              <button type="button" class="btn btn-again" id="again">
+                <svg class="btn-ico" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+                  <path d="M4.5 10a5.5 5.5 0 1 1 1.4 3.7M4.5 10V6.5m0 3.5H8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="again-text">再冲一张</span>
+              </button>
             </div>
             <p class="status" id="result-status" role="status"></p>
           </div>
@@ -283,7 +299,7 @@
             <span class="card-caption-text" id="card-caption-text"></span>
             <span class="card-caption-new" id="card-caption-new" hidden>新收入卡册</span>
           </div>
-          <p class="card-tip" id="card-tip">轻点翻开，看看冲出了什么材质</p>
+          <p class="card-tip" id="card-tip">点击翻开</p>
         </div>
       </div>
 
@@ -311,6 +327,21 @@
           <div class="binder-grid" id="card-collect-grid"></div>
         </div>
       </div>
+    </div>
+
+    <!-- 成片全屏预览层 -->
+    <div class="preview-modal" id="preview-modal" role="dialog" aria-modal="true" aria-label="成片全屏预览" hidden>
+      <div class="preview-bar">
+        <button type="button" class="card-bar-btn preview-close" id="close-preview" aria-label="退出全屏预览">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+            <path d="M5.5 5.5l9 9m0-9l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="preview-stage" id="preview-stage">
+        <img class="preview-img" id="preview-img" alt="冲洗出来的照片大图" />
+      </div>
+      <p class="preview-tip" id="preview-tip" aria-hidden="true">轻点退出</p>
     </div>
   </div>
 
