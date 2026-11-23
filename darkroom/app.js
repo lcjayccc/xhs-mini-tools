@@ -11,16 +11,19 @@
   var FIX_SECONDS = 4;
   var COUNT_KEY = 'darkroom.count';
   var CARDS_KEY = 'darkroom.cards';
-  // 卡册展示顺序。抽取规则见 docs/tasks/T-03-小卡/映射规则.md。
-  var MATERIALS = ['prism', 'rainbow', 'sparkle', 'pearl', 'etched', 'chrome'];
+  // 卡册 3×3 九宫格展示顺序（SSR → SR → R）；旧存档 6 个 ID 原样继承
+  var MATERIALS = ['prism', 'noir', 'cateye', 'sparkle', 'etched', 'chrome', 'rainbow', 'pearl', 'sunleak'];
 
   var MATERIAL_META = {
-    prism:   { name: '棱镜', rarity: '最稀有', code: 'SR', tier: 'prism',   origin: '碎光随角度变色', clue: '碎光在卡面折射' },
-    rainbow: { name: '彩虹', rarity: '普通',   code: 'C',  tier: 'common',  origin: '柔和的彩色光带', clue: '一条随角度变化的彩色光带' },
-    sparkle: { name: '闪粉', rarity: '特别款', code: 'SP', tier: 'special', origin: '细碎的闪点',     clue: '细小的光点时隐时现' },
-    pearl:   { name: '珠光', rarity: '特别款', code: 'SP', tier: 'special', origin: '柔和的贝母光泽', clue: '浅色卡面有贝母一样的光泽' },
-    etched:  { name: '蚀刻', rarity: '特别款', code: 'SP', tier: 'special', origin: '倾斜时浮现细线', clue: '光扫过时才看得清细线' },
-    chrome:  { name: '银镜', rarity: '特别款', code: 'SP', tier: 'special', origin: '镜面般的银光',   clue: '银白色的反光扫过卡面' }
+    prism:   { name: '碎冰棱镜', rarity: '暗房秘藏', code: 'SSR', tier: 'prism',   tag: '碎光折射', origin: '像把整片碎玻璃星河封进相纸',   clue: '碎光在暗处折射' },
+    noir:    { name: '暗房红印', rarity: '暗房秘藏', code: 'SSR', tier: 'prism',   tag: '黑金红印', origin: '红灯与鎏金定格的冲印店私藏',   clue: '暗房红光与鎏金' },
+    cateye:  { name: '丝绒猫眼', rarity: '工艺特版', code: 'SR',  tier: 'special', tag: '丝绒磁光', origin: '一道丝绒猫眼光随指尖游走聚集', clue: '游走的丝绒光带' },
+    sparkle: { name: '星尘闪粉', rarity: '工艺特版', code: 'SR',  tier: 'special', tag: '鎏金星尘', origin: '暗房里偷偷落进来的星尘',       clue: '细碎金闪时隐时现' },
+    etched:  { name: '银盐蚀刻', rarity: '工艺特版', code: 'SR',  tier: 'special', tag: '银盐雕纹', origin: '逆光细看，藏在暗处的银盐雕纹', clue: '光扫过浮现银线' },
+    chrome:  { name: '液态银镜', rarity: '工艺特版', code: 'SR',  tier: 'special', tag: '刀锋银光', origin: '一道冷冽的金属银盐刀锋光',     clue: '银白镜光斜切过' },
+    sunleak: { name: '暖阳漏光', rarity: '常驻典藏', code: 'R',   tier: 'common',  tag: '落日漏光', origin: '胶片边缘漏进一缕日落暖阳',     clue: '边角漏进暖橙光' },
+    pearl:   { name: '月光珠光', rarity: '常驻典藏', code: 'R',   tier: 'common',  tag: '柔雾贝母', origin: '像月光浸过的柔雾贝母纸',       clue: '温润的贝母光泽' },
+    rainbow: { name: '柔虹', rarity: '常驻典藏', code: 'R',   tier: 'common',  tag: '斜掠柔虹', origin: '光斜过来时，刚好掠过一道虹',   clue: '柔和游走的彩光' }
   };
 
   var prismTexUrl = '';
@@ -36,7 +39,8 @@
     material: '', collected: [], photo: null, round: 0,
     shotDate: '', isNewMaterial: false,
     lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0,
-    lastSloshRippleTs: 0
+    lastSloshRippleTs: 0,
+    sweetBuzzedRound: -1
   };
 
   var cardState = {
@@ -51,18 +55,35 @@
     tx: 0, ty: 0, dragging: false, hovering: false, lastInputTs: 0,
     sweepStart: 0, sweeping: false,
     slowFrames: 0, lowPerf: false, lastDraw: '',
+    sampleMode: false, sampleMat: '', sampleReturn: null,
     thumb: null
   };
 
-  var previewState = { open: false, opener: null, tipTimer: 0, compareBy: null, original: null };
+  var previewState = { open: false, opener: null, tipTimer: 0, compareBy: null, original: null, zoomed: false, tapTimer: 0, lastTapTs: 0 };
   var cropState = null;
 
   function show(name) {
     if (name !== 'result' && previewState.open) closePreview(true);
     screens.forEach(function (s) { $('screen-' + s).hidden = s !== name; });
+    if (name === 'develop') {
+      var paper = $('tray-paper');
+      if (paper && !isReducedMotion()) {
+        paper.className = 'tray-paper';
+        void paper.offsetWidth;
+        paper.className = 'tray-paper is-dipping';
+      }
+    }
     if (name !== 'result') {
       fitTrays();
     } else {
+      var resScreen = $('screen-result');
+      if (resScreen) {
+        resScreen.className = 'screen screen-result';
+        if (!isReducedMotion()) {
+          void resScreen.offsetWidth;
+          resScreen.className = 'screen screen-result is-entering';
+        }
+      }
       var openCardBtn = $('open-card');
       if (openCardBtn) {
         if (!isCurrentRevealed() && cardState.shimmerRound !== state.round && !isReducedMotion()) {
@@ -522,7 +543,7 @@
       var paper = screen.querySelector('.tray-paper');
       var sw = stage.clientWidth - 40, sh = stage.clientHeight - (isIntro ? 16 : 24);
       var hw = (sh - 24) / aspect + 24;
-      var w = Math.min(sw, hw, isIntro ? 264 : 360);
+      var w = Math.min(sw, hw, isIntro ? 296 : 360);
       tray.style.width = Math.floor(Math.max(Math.min(isIntro ? 90 : 140, hw), w)) + 'px';
       tray.style.maxWidth = 'none';
       paper.style.paddingTop = (aspect * 100).toFixed(2) + '%';
@@ -536,13 +557,13 @@
     if (!stage || !scene) return;
     var caption = $('card-caption');
     var tip = $('card-tip');
-    var extraH = 20;
+    var extraH = 22;
     if (caption) extraH += Math.max(18, caption.offsetHeight) + 8;
     if (tip) extraH += Math.max(16, tip.offsetHeight) + 6;
-    var sw = stage.clientWidth - 40;
+    var sw = stage.clientWidth - 36;
     var sh = stage.clientHeight - extraH;
     var hw = sh * (55 / 85);
-    var w = Math.min(sw, hw, 264);
+    var w = Math.min(sw, hw, 316);
     scene.style.width = Math.max(92, Math.floor(w)) + 'px';
   }
 
@@ -630,27 +651,51 @@
       if (holdMs) {
         cropState.gridTimer = setTimeout(function () {
           if (cropState) cropState.gridTimer = 0;
-          if (!cropState || !cropState.drag) frame.className = 'crop-frame';
+          if (!cropState || !cropState.pointers.length) frame.className = 'crop-frame';
         }, holdMs);
       }
     } else {
       cropState.gridTimer = setTimeout(function () {
         if (cropState) cropState.gridTimer = 0;
-        if (!cropState || !cropState.drag) frame.className = 'crop-frame';
+        if (!cropState || !cropState.pointers.length) frame.className = 'crop-frame';
       }, holdMs || 220);
     }
+  }
+
+  function describeOriginalAspect(w, h) {
+    if (!w || !h) return '原图';
+    var r = w / h;
+    var presets = [
+      [16 / 9, '16:9'], [3 / 2, '3:2'], [4 / 3, '4:3'], [1, '1:1'],
+      [3 / 4, '3:4'], [2 / 3, '2:3'], [9 / 16, '9:16'], [55 / 85, '55:85']
+    ];
+    for (var i = 0; i < presets.length; i += 1) {
+      if (Math.abs(r - presets[i][0]) < 0.008) return '原图 · ' + presets[i][1];
+    }
+    return r >= 1 ? ('原图 · ' + r.toFixed(1) + ':1') : ('原图 · 1:' + (1 / r).toFixed(1));
+  }
+
+  function applyCropZoom(val) {
+    if (!cropState) return;
+    var z = Math.max(1, Math.min(3, val));
+    cropState.zoom = z;
+    var input = $('crop-zoom');
+    if (input) input.value = z.toFixed(2);
+    var zoomVal = $('crop-zoom-val');
+    if (zoomVal) zoomVal.textContent = z.toFixed(1) + '×';
+    paintCrop();
   }
 
   function selectCropRatio(format) {
     var image = cropState.image;
     var horizontal = image.naturalWidth >= image.naturalHeight;
-    var badgeText = 'ORIGINAL';
+    var badgeText = '原图';
     if (format === 'original') {
       cropState.ratio = image.naturalWidth / image.naturalHeight;
-      badgeText = '原图';
+      badgeText = describeOriginalAspect(image.naturalWidth, image.naturalHeight);
     } else if (format === 'card') {
       cropState.ratio = Film.cardPhotoAspect;
-      badgeText = '小卡同框 · 3:4';
+      badgeText = '小卡同框 · 55:85';
     } else {
       var sides = format.split(':');
       var ratio = Number(sides[0]) / Number(sides[1]);
@@ -671,13 +716,13 @@
     }
     var badge = $('crop-format-badge');
     if (badge) badge.textContent = badgeText;
-    $('crop-hint').textContent = cropState.ratio === Film.cardPhotoAspect
-      ? '成片与小卡共用同一取景' : '拖动取景框，拨动下方刻度缩放';
+    $('crop-hint').textContent = Math.abs(cropState.ratio - Film.cardPhotoAspect) < 1e-9
+      ? '成片与小卡共用此取景' : '';
     paintCrop();
   }
 
   function startCrop(image) {
-    cropState = { image: image, zoom: 1, x: 0.5, y: 0.5, drag: null, gridTimer: 0 };
+    cropState = { image: image, zoom: 1, x: 0.5, y: 0.5, drag: null, pointers: [], pinchDist: 0, pinchZoom: 1, gridTimer: 0 };
     image.className = 'crop-source';
     image.draggable = false;
     image.alt = '';
@@ -686,9 +731,6 @@
     $('crop-zoom').value = '1';
     var zoomVal = $('crop-zoom-val');
     if (zoomVal) zoomVal.textContent = '1.0×';
-    var horizontal = image.naturalWidth >= image.naturalHeight;
-    $('crop-card-ratio').hidden = !horizontal;
-    $('crop-half-card-match').hidden = horizontal;
     setStatus('crop-status', '');
     setStatus('intro-status', '');
     selectCropRatio('original');
@@ -713,20 +755,53 @@
       });
     }
     $('crop-zoom').addEventListener('input', function (e) {
-      cropState.zoom = Number(e.target.value);
-      var zoomVal = $('crop-zoom-val');
-      if (zoomVal) zoomVal.textContent = cropState.zoom.toFixed(1) + '×';
       setCropGridVisible(true, 360);
-      paintCrop();
+      applyCropZoom(Number(e.target.value));
     });
+    $('crop-zoom-val').addEventListener('click', function () {
+      if (!cropState) return;
+      cropState.x = 0.5;
+      cropState.y = 0.5;
+      setCropGridVisible(true, 320);
+      applyCropZoom(1);
+    });
+    function findPtr(id) {
+      if (!cropState) return -1;
+      for (var k = 0; k < cropState.pointers.length; k += 1) {
+        if (cropState.pointers[k].id === id) return k;
+      }
+      return -1;
+    }
+    function ptrDist(a, b) {
+      var dx = a.x - b.x, dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
     frame.addEventListener('pointerdown', function (e) {
-      if (e.button !== 0 || cropState.drag) return;
-      cropState.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      if (!cropState || e.button !== 0) return;
+      if (findPtr(e.pointerId) >= 0 || cropState.pointers.length === 2) return;
+      cropState.pointers.push({ id: e.pointerId, x: e.clientX, y: e.clientY });
+      if (cropState.pointers.length === 1) {
+        cropState.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      } else if (cropState.pointers.length === 2) {
+        cropState.drag = null;
+        cropState.pinchDist = Math.max(10, ptrDist(cropState.pointers[0], cropState.pointers[1]));
+        cropState.pinchZoom = cropState.zoom;
+      }
       setCropGridVisible(true);
       if (frame.setPointerCapture) { try { frame.setPointerCapture(e.pointerId); } catch (err) { /* 指针已释放 */ } }
     });
     frame.addEventListener('pointermove', function (e) {
-      var drag = cropState && cropState.drag;
+      if (!cropState) return;
+      var idx = findPtr(e.pointerId);
+      if (idx < 0) return;
+      cropState.pointers[idx].x = e.clientX;
+      cropState.pointers[idx].y = e.clientY;
+      if (cropState.pointers.length === 2 && cropState.pinchDist > 0) {
+        var d = ptrDist(cropState.pointers[0], cropState.pointers[1]);
+        applyCropZoom(cropState.pinchZoom * (d / cropState.pinchDist));
+        return;
+      }
+      var drag = cropState.drag;
       if (!drag || drag.id !== e.pointerId) return;
       var area = frame.getBoundingClientRect();
       cropState.x += (e.clientX - drag.x) / area.width;
@@ -736,8 +811,17 @@
       paintCrop();
     });
     function release(e) {
-      if (cropState && cropState.drag && cropState.drag.id === e.pointerId) {
+      if (!cropState) return;
+      var idx = findPtr(e.pointerId);
+      if (idx < 0) return;
+      cropState.pointers.splice(idx, 1);
+      if (cropState.pointers.length === 1) {
+        var rem = cropState.pointers[0];
+        cropState.drag = { id: rem.id, x: rem.x, y: rem.y };
+        cropState.pinchDist = 0;
+      } else if (cropState.pointers.length === 0) {
         cropState.drag = null;
+        cropState.pinchDist = 0;
         setCropGridVisible(false, 220);
       }
     }
@@ -898,7 +982,13 @@
     if (devScreen) {
       var isSweet = state.dev >= 0.9 && state.dev <= 1.12;
       var sweetCls = isSweet ? 'screen screen-develop is-sweet' : 'screen screen-develop';
-      if (devScreen.className !== sweetCls) devScreen.className = sweetCls;
+      if (devScreen.className !== sweetCls) {
+        devScreen.className = sweetCls;
+        if (isSweet && state.sweetBuzzedRound !== state.round) {
+          state.sweetBuzzedRound = state.round;
+          Bridge.vibrate('light');
+        }
+      }
     }
 
     var pullBtn = $('pull-out');
@@ -999,6 +1089,10 @@
     paintDevelop(fixCanvas, state.dev);
     state.fix = 0;
     state.lastFixSec = 0;
+    var fixTray = document.querySelector('.tray-fix');
+    var fixRed = document.querySelector('.tray-fix .tray-red');
+    if (fixTray) fixTray.classList.remove('is-fixed');
+    if (fixRed) fixRed.style.opacity = '';
     $('fix-fill').style.width = '0';
     $('fix-text').textContent = '按住定影 4 秒';
     $('fix-hint').textContent = '';
@@ -1014,15 +1108,19 @@
   /* ---------- 定影：按住计时 ---------- */
   function bindFix() {
     var btn = $('fix-hold');
+    var fixTray = document.querySelector('.tray-fix');
+    var fixRed = document.querySelector('.tray-fix .tray-red');
     function step() {
       if (!state.fixHolding) return;
       var now = Date.now();
       state.fix = Math.min(1, state.fix + (now - state.fixTimer) / 1000 / FIX_SECONDS);
       state.fixTimer = now;
       $('fix-fill').style.width = Math.round(state.fix * 100) + '%';
+      if (fixRed) fixRed.style.opacity = (1 - state.fix * 0.16).toFixed(3);
       if (state.fix >= 1) {
         state.fixHolding = false;
         holdBy = null;
+        if (fixTray) fixTray.classList.add('is-fixed');
         btn.className = 'btn btn-hold is-done';
         $('fix-text').textContent = '✓ 定影已完成';
         $('fix-hint').textContent = '';
@@ -1112,15 +1210,33 @@
     btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
-  /* 每轮冲印独立抽取：普通 40%，四种特别款各 12.5%，棱镜 10%。 */
+  // 基础权重与显影结果无关。未集齐时，会话前两张优先给未收集款。
+  var MATERIAL_WEIGHTS = {
+    prism: 5, noir: 5, cateye: 9, sparkle: 9, etched: 9, chrome: 9,
+    rainbow: 18, pearl: 18, sunleak: 18
+  };
+  var sessionDraws = 0, sessionDupes = 0;
+
   function pickMaterial() {
-    var roll = Math.random();
-    if (roll < 0.4) return 'rainbow';
-    if (roll < 0.525) return 'sparkle';
-    if (roll < 0.65) return 'pearl';
-    if (roll < 0.775) return 'etched';
-    if (roll < 0.9) return 'chrome';
-    return 'prism';
+    var onlyNew = sessionDraws < 2 && state.collected.length < MATERIALS.length;
+    var total = 0;
+    var weights = MATERIALS.map(function (key) {
+      var collected = state.collected.indexOf(key) >= 0;
+      var weight = MATERIAL_WEIGHTS[key];
+      if (collected && onlyNew) weight = 0;
+      if (!collected && sessionDupes >= 2) weight *= 2;
+      total += weight;
+      return weight;
+    });
+    var roll = Math.random() * total;
+    var picked = MATERIALS[MATERIALS.length - 1];
+    for (var i = 0; i < MATERIALS.length; i += 1) {
+      if (roll < weights[i]) { picked = MATERIALS[i]; break; }
+      roll -= weights[i];
+    }
+    sessionDraws += 1;
+    sessionDupes = state.collected.indexOf(picked) >= 0 ? sessionDupes + 1 : 0;
+    return picked;
   }
 
   function collectMaterial(m) {
@@ -1403,10 +1519,11 @@
         var gx = ((lx - 50) * 0.5).toFixed(2);
         var gy = ((ly - 50) * 0.5).toFixed(2);
         setTransform(glare, 'translate3d(' + gx + '%,' + gy + '%,0)');
-        var mat = state.material || 'rainbow';
-        var gOp = mat === 'prism' ? (0.25 + on * 0.45) :
-          (mat === 'pearl' ? (0.48 + on * 0.48) :
-          (mat === 'etched' ? (0.20 + on * 0.40) : (0.35 + on * 0.65)));
+        var mat = (cardState.sampleMode ? cardState.sampleMat : state.material) || 'rainbow';
+        var gOp = (mat === 'prism' || mat === 'noir') ? (0.26 + on * 0.44) :
+          (mat === 'pearl' ? (0.46 + on * 0.46) :
+          (mat === 'etched' ? (0.20 + on * 0.40) :
+          (mat === 'cateye' ? (0.30 + on * 0.50) : (0.34 + on * 0.56))));
         glare.style.opacity = gOp.toFixed(3);
       }
       if (rim) {
@@ -1585,12 +1702,26 @@
       if (isMaterialVisibleInBinder(k)) got += 1;
     });
     var shortText = got + '/' + MATERIALS.length;
+    var elIntroBtn = $('open-binder-intro');
+    var elIntro = $('binder-count-intro');
     var elRes = $('binder-count-result');
     var elCard = $('binder-count-card');
     var elHead = $('card-collect-count');
+    if (elIntro) elIntro.textContent = shortText;
+    if (elIntroBtn) elIntroBtn.hidden = got === 0;
     if (elRes) elRes.textContent = shortText;
     if (elCard) elCard.textContent = shortText;
     if (elHead) elHead.textContent = '已收集 ' + shortText;
+    var seal = $('binder-complete-seal');
+    if (seal) seal.hidden = got < MATERIALS.length;
+    var prog = $('binder-progress');
+    if (prog) {
+      prog.className = got >= MATERIALS.length ? 'binder-progress is-complete' : 'binder-progress';
+      var segs = prog.querySelectorAll('.bp-seg');
+      for (var i = 0; i < segs.length; i += 1) {
+        segs[i].className = i < got ? 'bp-seg is-filled' : 'bp-seg';
+      }
+    }
   }
 
   function renderBinderGrid() {
@@ -1625,13 +1756,18 @@
         var head = document.createElement('div');
         head.className = 'pocket-head';
         var num = document.createElement('span');
-        num.textContent = pad(idx + 1, 2) + ' / ' + meta.code;
+        num.textContent = pad(idx + 1, 2);
         head.appendChild(num);
         if (isCurrent) {
           var badge = document.createElement('span');
           badge.className = 'pocket-now';
           badge.textContent = '本次';
           head.appendChild(badge);
+        } else {
+          var tierTag = document.createElement('span');
+          tierTag.className = 'pocket-tier pocket-tier-' + meta.code.toLowerCase();
+          tierTag.textContent = meta.code;
+          head.appendChild(tierTag);
         }
 
         var center = document.createElement('div');
@@ -1647,30 +1783,32 @@
 
         var origin = document.createElement('p');
         origin.className = 'pocket-origin';
-        origin.textContent = meta.origin;
+        origin.textContent = meta.tag;
 
         card.appendChild(head);
         card.appendChild(center);
         card.appendChild(origin);
 
-        if (isCurrent) {
-          var hit = document.createElement('button');
-          hit.type = 'button';
-          hit.className = 'pocket-hit';
-          hit.setAttribute('aria-label', '查看本次冲出的' + meta.name + '小卡');
-          hit.addEventListener('click', function () {
-            if (cardState.open) {
+        var hit = document.createElement('button');
+        hit.type = 'button';
+        hit.className = 'pocket-hit';
+        hit.setAttribute('aria-label', isCurrent ? ('查看本次冲出的' + meta.name + '小卡') : ('赏光预览' + meta.name + '工艺样卡'));
+        hit.addEventListener('click', function () {
+          var binderOpener = cardState.binderOpener;
+          if (isCurrent) {
+            if (cardState.open && !cardState.sampleMode) {
               showRevealedFront(false);
               closeBinder();
               fitCard();
             } else {
-              var binderOpener = cardState.binderOpener;
               closeBinder(true);
               openCard(null, { alreadyRevealed: true, returnFocus: binderOpener || $('open-binder-result') });
             }
-          });
-          card.appendChild(hit);
-        }
+          } else {
+            openSampleCard(key, binderOpener);
+          }
+        });
+        card.appendChild(hit);
 
         pocket.appendChild(card);
       } else {
@@ -1739,7 +1877,7 @@
     if (state.photo) {
       try {
         var tc = document.createElement('canvas');
-        tc.width = 165; tc.height = 220;
+        tc.width = 165; tc.height = 255;
         Film.drawCardPhoto(state.photo, tc, cardState.photoBounds);
         cardState.thumb = { round: state.round, material: mat, url: tc.toDataURL('image/jpeg', 0.72) };
       } catch (err) { cardState.thumb = null; }
@@ -1749,6 +1887,8 @@
     if (scene) scene.className = 'holo-scene';
     var card = $('holo-card');
     if (card) card.className = 'holo-flipper';
+    var backEl = $('holo-back');
+    if (backEl) backEl.className = 'holo-face holo-back is-revealed';
 
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = !state.isNewMaterial;
@@ -1827,27 +1967,83 @@
     Bridge.vibrate('light');
   }
 
+  function drawMaterialSampleCanvas(canvas, mat) {
+    var w = canvas.width, h = canvas.height;
+    var ctx = canvas.getContext('2d');
+    var schemes = {
+      prism:   ['#0d193d', '#1c3b7a', '#2e1d5e', 'rgba(130, 224, 255, 0.28)'],
+      noir:    ['#2b0d0b', '#4d1712', '#140605', 'rgba(244, 204, 132, 0.34)'],
+      cateye:  ['#2a1832', '#4d2b5c', '#180d1e', 'rgba(236, 198, 248, 0.30)'],
+      sparkle: ['#231814', '#3b281c', '#120b09', 'rgba(255, 224, 168, 0.28)'],
+      etched:  ['#161619', '#24262c', '#0d0d10', 'rgba(210, 222, 240, 0.22)'],
+      chrome:  ['#9ba3ae', '#dce2ea', '#7b838e', 'rgba(255, 255, 255, 0.36)'],
+      sunleak: ['#4d2213', '#8c3f21', '#22100a', 'rgba(255, 206, 146, 0.32)'],
+      pearl:   ['#e6dfd8', '#f6f1ec', '#ddd6e4', 'rgba(72, 58, 52, 0.16)'],
+      rainbow: ['#2a1f1d', '#493530', '#1c1413', 'rgba(255, 220, 196, 0.22)']
+    };
+    var pal = schemes[mat] || schemes.rainbow;
+    var g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, pal[0]); g.addColorStop(0.5, pal[1]); g.addColorStop(1, pal[2]);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    // 暗房工艺样卡中央光圈暗纹
+    var cx = w / 2, cy = h * 0.45, R = w * 0.28;
+    ctx.save();
+    ctx.strokeStyle = pal[3];
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.68, 0, Math.PI * 2); ctx.stroke();
+    for (var k = 0; k < 6; k += 1) {
+      var a = k * Math.PI / 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * R * 0.68, cy + Math.sin(a) * R * 0.68);
+      ctx.lineTo(cx + Math.cos(a + 2.0) * R * 0.26, cy + Math.sin(a + 2.0) * R * 0.26);
+      ctx.stroke();
+    }
+    ctx.fillStyle = mat === 'pearl' || mat === 'chrome' ? 'rgba(36, 26, 22, 0.72)' : 'rgba(255, 244, 234, 0.82)';
+    ctx.textAlign = 'center';
+    ctx.font = '600 44px "Songti SC", "STSong", "SimSun", serif';
+    ctx.fillText((MATERIAL_META[mat] || MATERIAL_META.rainbow).name, cx, cy + R + 72);
+    ctx.font = '14px "SF Mono", Menlo, Consolas, monospace';
+    ctx.fillStyle = mat === 'pearl' || mat === 'chrome' ? 'rgba(36, 26, 22, 0.50)' : 'rgba(255, 244, 234, 0.50)';
+    ctx.fillText('DARKROOM LAB · SAMPLE', cx, cy + R + 106);
+    ctx.restore();
+  }
+
   function renderCardContent() {
-    var mat = state.material || 'rainbow';
+    var isSample = !!cardState.sampleMode;
+    var mat = isSample ? (cardState.sampleMat || 'rainbow') : (state.material || 'rainbow');
     var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
     var noPad = pad(state.shotNo || state.count, 4);
 
     $('holo-front').setAttribute('data-material', mat);
     var edgesEl = $('holo-edges');
     if (edgesEl) edgesEl.setAttribute('data-material', mat);
-    $('card-front-no').textContent = 'NO.' + noPad;
+    $('card-front-no').textContent = isSample ? 'SAMPLE' : ('NO.' + noPad);
     $('card-front-mat').textContent = meta.name;
     $('card-front-rarity').innerHTML = buildRarityMarkup(meta);
-    $('card-back-no').textContent = 'No.' + noPad;
-    $('card-back-date').textContent = state.shotDate || '2026.11.19';
+    $('card-back-no').textContent = isSample ? 'SAMPLE' : ('No.' + noPad);
+    $('card-back-date').textContent = isSample ? 'ARCHIVE' : (state.shotDate || '2026.11.19');
+
+    var bt = $('card-back-title');
+    if (bt) bt.textContent = isSample ? ('暗房工艺样卡 · ' + meta.name) : (state.title || '刚刚好的一张');
+    var bm = $('card-back-mat');
+    if (bm) bm.textContent = meta.name;
+    var br = $('card-back-rarity');
+    if (br) br.textContent = meta.rarity + ' ' + meta.code;
+    var bo = $('card-back-origin');
+    if (bo) bo.textContent = meta.origin;
 
     var fx = $('holo-fx');
     if (fx && mat === 'prism') {
       fx.style.setProperty('--prism-tex', getPrismTexture());
     }
 
-    if (state.photo) {
-      var photoCanvas = $('card-photo');
+    var photoCanvas = $('card-photo');
+    if (isSample) {
+      drawMaterialSampleCanvas(photoCanvas, mat);
+    } else if (state.photo) {
       Film.drawCardPhoto(state.photo, photoCanvas, cardState.photoBounds);
     }
 
@@ -1870,6 +2066,8 @@
     if (card) card.className = instant ? 'holo-flipper is-instant' : 'holo-flipper';
     var aura = $('holo-aura');
     if (aura) aura.className = 'holo-aura';
+    var backEl = $('holo-back');
+    if (backEl) backEl.className = 'holo-face holo-back is-revealed';
 
     $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
     $('card-caption-new').hidden = true;
@@ -1879,14 +2077,73 @@
     var saveBtn = $('save-card');
     $('card-framing-entry').hidden = true;
     if (saveBtn) {
+      resetSaveFeedback('save-card');
       saveBtn.hidden = false;
       saveBtn.disabled = state.busy;
       saveBtn.className = 'btn btn-primary';
     }
   }
 
+  function openSampleCard(mat, binderOpener) {
+    var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
+    var previousCard = cardState.open ? { opener: cardState.cardOpener, revealed: cardState.revealed } : null;
+    if (previousCard) closeCard(true);
+    closeBinder(true);
+    cardState.sampleMode = true;
+    cardState.sampleMat = mat;
+    cardState.sampleReturn = { binderOpener: binderOpener, previousCard: previousCard, material: mat };
+    cardState.openSeq = (cardState.openSeq || 0) + 1;
+    cardState.cardOpener = binderOpener || $('open-binder-result');
+    renderCardContent();
+    cardState.open = true;
+    cardState.revealed = true;
+    cardState.revealing = false;
+    cardState.flipped = false;
+    cardState.sweeping = false;
+    cardState.rx = 0; cardState.ry = 0; cardState.vx = 0; cardState.vy = 0;
+    cardState.lx = 34; cardState.ly = 22; cardState.vlx = 0; cardState.vly = 0; cardState.on = 0;
+    cardState.turn = 0; cardState.vTurn = 0; cardState.charge = 0;
+    cardState.tx = 0; cardState.ty = 0; cardState.dragging = false; cardState.hovering = false; cardState.lastInputTs = 0;
+    cardState.slowFrames = 0; cardState.lastDraw = '';
+
+    $('close-card-label').textContent = '返回卡册';
+    $('close-card').setAttribute('aria-label', '返回卡册');
+    $('open-binder-card').hidden = true;
+    $('card-framing-entry').hidden = true;
+    var saveBtn = $('save-card');
+    if (saveBtn) { saveBtn.hidden = true; saveBtn.disabled = true; }
+    var backEl = $('holo-back');
+    if (backEl) backEl.className = 'holo-face holo-back is-revealed';
+    var card = $('holo-card');
+    card.className = 'holo-flipper is-instant';
+    $('card-caption-text').textContent = meta.name + ' · ' + meta.origin;
+    $('card-caption-new').hidden = true;
+    $('card-caption').className = 'card-caption is-visible';
+    $('card-tip').textContent = '倾斜看光 · 轻点翻看档案卡背';
+    var scene = $('holo-scene');
+    if (scene) {
+      scene.className = 'holo-scene';
+      void scene.offsetWidth;
+      scene.className = 'holo-scene is-entering';
+    }
+    $('card-modal').hidden = false;
+    fitCard();
+    applyCardVisual(0, 0);
+    void card.offsetWidth;
+    card.className = 'holo-flipper';
+    startCardLoop();
+    startCardGyro();
+    focusModal($('card-modal'), card);
+  }
+
   function openCard(e, opts) {
     if (!state.photo) return;
+    cardState.sampleMode = false;
+    cardState.sampleMat = '';
+    cardState.sampleReturn = null;
+    $('close-card-label').textContent = '返回相纸';
+    $('close-card').setAttribute('aria-label', '返回出片页');
+    $('open-binder-card').hidden = false;
     if (!cardState.photoBounds) cardState.photoBounds = Film.cardPhotoBounds(state.photo);
     cardState.openSeq = (cardState.openSeq || 0) + 1;   // 每次打开一个序号，存卡结果只回写发起它的那次
     var showFront = !!(opts && opts.alreadyRevealed && isCurrentRevealed());
@@ -1915,6 +2172,8 @@
       card.className = 'holo-flipper is-flipped is-instant';
       var aura = $('holo-aura');
       if (aura) aura.className = 'holo-aura';
+      var backEl = $('holo-back');
+      if (backEl) backEl.className = 'holo-face holo-back';
       $('card-caption').className = 'card-caption';
       $('card-caption-text').textContent = '';
       $('card-caption-new').hidden = true;
@@ -1949,18 +2208,35 @@
 
   function closeCard(noFocus) {
     if (!cardState.open) return;
+    resetSaveFeedback('save-card');
+    var sampleReturn = cardState.sampleReturn;
     closeCardFraming(true);
     cardState.open = false;
+    cardState.sampleMode = false;
+    cardState.sampleMat = '';
+    cardState.sampleReturn = null;
     cardState.revealing = false;
     cardState.dragging = false;
     cardState.hovering = false;
     cardState.sweeping = false;
+    $('close-card-label').textContent = '返回相纸';
+    $('close-card').setAttribute('aria-label', '返回出片页');
+    $('open-binder-card').hidden = false;
     stopCardLoop();
     stopCardGyro();
     $('card-modal').hidden = true;
     var opener = cardState.cardOpener;
     cardState.cardOpener = null;
-    if (noFocus !== true) restoreFocus(opener);
+    if (noFocus === true) return;
+    if (sampleReturn) {
+      var previousCard = sampleReturn.previousCard;
+      if (previousCard) openCard(null, { alreadyRevealed: previousCard.revealed, returnFocus: previousCard.opener });
+      openBinder({ currentTarget: sampleReturn.binderOpener || opener });
+      var sampleSlot = $('card-collect-grid').querySelector('[data-material="' + sampleReturn.material + '"] .pocket-hit');
+      restoreFocus(sampleSlot);
+    } else {
+      restoreFocus(opener);
+    }
   }
 
   function setUnrevealedCardTip() {
@@ -1982,17 +2258,15 @@
     ctx.closePath();
   }
 
+  var CARD_FRAMING_WIDTH = 188;
+
   function renderCardFraming() {
     var canvas = $('card-framing-canvas'), ctx = canvas.getContext('2d');
     var crop = cardState.framingBounds, photo = state.photo;
     var w = canvas.width, h = canvas.height;
-    var frameWidth = w / 2, frameHeight = frameWidth * crop.h / crop.w;
-    var left = (w - frameWidth) / 2;
-    var pad = 10;
-    var cardW = frameWidth + pad * 2;
-    var cardH = Math.round(cardW * 85 / 55);
-    var cardY = Math.round((h - cardH) / 2);
-    var top = cardY + pad;
+    var frameWidth = CARD_FRAMING_WIDTH, frameHeight = Math.round(frameWidth * crop.h / crop.w);
+    var left = Math.round((w - frameWidth) / 2);
+    var top = Math.round((h - frameHeight) / 2);
     var scale = frameWidth / crop.w;
 
     ctx.clearRect(0, 0, w, h);
@@ -2000,34 +2274,29 @@
       photo.width * scale, photo.height * scale);
 
     // 窗外压暗遮罩
-    ctx.fillStyle = 'rgba(10, 6, 6, 0.76)';
+    ctx.fillStyle = 'rgba(10, 6, 6, 0.78)';
     ctx.fillRect(0, 0, w, top);
     ctx.fillRect(0, top + frameHeight, w, h - (top + frameHeight));
     ctx.fillRect(0, top, left, frameHeight);
     ctx.fillRect(left + frameWidth, top, w - (left + frameWidth), frameHeight);
 
-    // 55:85 实体小卡中性卡套轮廓（不剧透材质与稀有度）
-    var cardX = left - pad;
+    // 55:85 全出血小卡中性圆角轮廓 + 右下角微章位置示意（不剧透材质）
     ctx.save();
-    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 10);
-    ctx.strokeStyle = 'rgba(245, 232, 224, 0.24)';
+    drawRoundedRectPath(ctx, left, top, frameWidth, frameHeight, 10);
+    ctx.strokeStyle = 'rgba(245, 232, 224, 0.34)';
     ctx.lineWidth = 1;
     ctx.stroke();
-
-    // 底部信息条中性占位示意
-    var metaLineY = top + frameHeight + 8;
-    ctx.beginPath();
-    ctx.moveTo(left + 2, metaLineY);
-    ctx.lineTo(left + frameWidth - 2, metaLineY);
-    ctx.strokeStyle = 'rgba(245, 232, 224, 0.14)';
+    drawRoundedRectPath(ctx, left + 6, top + 6, frameWidth - 12, frameHeight - 12, 6);
+    ctx.strokeStyle = 'rgba(245, 232, 224, 0.16)';
     ctx.stroke();
-    ctx.fillStyle = 'rgba(245, 232, 224, 0.20)';
-    ctx.fillRect(left + 4, metaLineY + 12, 42, 4);
-    ctx.fillRect(left + 4, metaLineY + 22, 28, 3);
-    ctx.fillRect(left + frameWidth - 36, metaLineY + 14, 32, 5);
+    drawRoundedRectPath(ctx, left + frameWidth - 62, top + frameHeight - 24, 50, 14, 7);
+    ctx.fillStyle = 'rgba(16, 10, 10, 0.45)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245, 232, 224, 0.25)';
+    ctx.stroke();
     ctx.restore();
 
-    // 3:4 照片窗发丝框 + 四角 L 型光学角标
+    // 满版照片窗发丝框 + 四角 L 型光学角标
     ctx.strokeStyle = 'rgba(255, 244, 232, 0.38)';
     ctx.lineWidth = 1;
     ctx.strokeRect(left + 0.5, top + 0.5, frameWidth - 1, frameHeight - 1);
@@ -2119,7 +2388,7 @@
       if (!drag || drag.id !== e.pointerId) return;
       var width = canvas.getBoundingClientRect().width;
       if (!width) return;
-      var units = 2 * cardState.framingBounds.w / width;
+      var units = (canvas.width / width) * cardState.framingBounds.w / CARD_FRAMING_WIDTH;
       moveCardFraming((e.clientX - drag.x) * units, (e.clientY - drag.y) * units);
       drag.x = e.clientX;
       drag.y = e.clientY;
@@ -2187,7 +2456,7 @@
   }
 
   /* ---------- 存这张小卡：卡背在后、正面在前的晒卡图 ---------- */
-  var RARITY_MARK = { C: '●', SP: '✦', SR: '✦✦' };
+  var RARITY_MARK = { R: '●', SR: '✦', SSR: '✦✦' };
 
   function ensureCardShot() {
     var got = 0;
@@ -2200,7 +2469,9 @@
     var no = 'No.' + pad(state.shotNo || state.count, 4);
     var shot = Film.composePhotocard(state.photo, {
       photoBounds: cardState.photoBounds,
-      material: mat, name: meta.name, code: meta.code, mark: RARITY_MARK[meta.code] || '',
+      material: mat, name: meta.name, rarity: meta.rarity, code: meta.code, mark: RARITY_MARK[meta.code] || '',
+      title: state.title || '刚刚好的一张',
+      origin: meta.origin,
       no: no, date: state.shotDate || '',
       footer1: '暗房冲印店 · ' + meta.name + '（' + meta.rarity + '）',
       footer2: no + '  ·  ' + (state.shotDate || '') + '  ·  已收集 ' + got + '/' + MATERIALS.length
@@ -2212,9 +2483,34 @@
     });
   }
 
+  var savedButtonFeedback = {};
+
+  function resetSaveFeedback(id) {
+    var reset = savedButtonFeedback[id];
+    if (reset) reset();
+  }
+
+  function showSaveFeedback(id, label, successText) {
+    resetSaveFeedback(id);
+    var btn = $(id);
+    var originalText = label.textContent;
+    label.textContent = successText;
+    btn.classList.add('is-saved');
+    var timer = setTimeout(reset, 2000);
+    savedButtonFeedback[id] = reset;
+
+    function reset() {
+      clearTimeout(timer);
+      label.textContent = originalText;
+      btn.classList.remove('is-saved');
+      delete savedButtonFeedback[id];
+    }
+  }
+
   function saveCard() {
     var btn = $('save-card');
-    if (state.busy || !state.photo || !cardState.revealed) return;
+    if (state.busy || !state.photo || !cardState.open || !cardState.revealed || cardState.sampleMode) return;
+    resetSaveFeedback('save-card');
     state.busy = true;
     btn.disabled = true;
     $('card-tip').textContent = '正在存…';
@@ -2223,9 +2519,11 @@
     setTimeout(function () {
       // 合成放进 Promise 链：同步抛错也会走到失败分支，按钮和提示一定能恢复
       Promise.resolve().then(ensureCardShot).then(Bridge.saveImage).then(function () {
-        if (round === state.round && seq === cardState.openSeq) $('card-tip').textContent = '小卡存到相册了。';
+        if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
+        $('card-tip').textContent = '小卡存到相册了。';
+        showSaveFeedback('save-card', btn, '✓ 已珍藏');
       }, function (err) {
-        if (round !== state.round || seq !== cardState.openSeq) return;
+        if (round !== state.round || seq !== cardState.openSeq || !cardState.open) return;
         $('card-tip').textContent = err && err.errMsg ? failText(err, '存小卡') : '小卡没合成出来，再点一次试试。';
       }).then(releaseBusy);
     }, 30);
@@ -2320,9 +2618,10 @@
   function renderReportTags(items, isPerfect) {
     var box = $('result-report');
     box.innerHTML = '';
-    items.forEach(function (text, idx) {
+    var visible = items.filter(function (text) { return !/^药水流动/.test(text); });
+    visible.forEach(function (text, idx) {
       var span = document.createElement('span');
-      span.className = (isPerfect && idx === items.length - 1) ? 'report-tag report-tag-ok' : 'report-tag';
+      span.className = (isPerfect && idx === visible.length - 1) ? 'report-tag report-tag-ok' : 'report-tag';
       span.textContent = idx === 0 ? text.replace(/^显影\s+/, '') : text;
       box.appendChild(span);
     });
@@ -2336,10 +2635,14 @@
     var modal = $('preview-modal');
     var img = $('preview-img');
     var tip = $('preview-tip');
+    previewState.zoomed = false;
+    previewState.lastTapTs = 0;
+    clearTimeout(previewState.tapTimer);
+    previewState.tapTimer = 0;
     if (img) img.src = state.cardUrl;
     $('preview-compare').disabled = !state.base || !state.cardInfo;
     if (tip) {
-      tip.textContent = '轻点退出';
+      tip.textContent = '双击放大看颗粒 · 轻点退出';
       tip.className = 'preview-tip';
     }
     clearTimeout(previewState.tipTimer);
@@ -2358,6 +2661,25 @@
     focusModal(modal, $('close-preview'));
   }
 
+  function fitPreviewZoom() {
+    var stage = $('preview-stage');
+    // 原底片和成片都用 composeCard 生成同规格的 3:4 相纸。
+    var fitted = Math.min(stage.clientWidth - 32, (stage.clientHeight - 16) * 3 / 4, 1080);
+    stage.style.setProperty('--preview-zoom-width', Math.max(1, fitted * 1.9) + 'px');
+  }
+
+  function togglePreviewZoom() {
+    var stage = $('preview-stage');
+    var modal = $('preview-modal');
+    previewState.zoomed = !previewState.zoomed;
+    if (previewState.zoomed) fitPreviewZoom();
+    modal.className = 'preview-modal is-open' +
+      (previewState.compareBy !== null ? ' is-comparing' : '') +
+      (previewState.zoomed ? ' is-zoomed' : '');
+    stage.scrollLeft = (stage.scrollWidth - stage.clientWidth) / 2;
+    stage.scrollTop = (stage.scrollHeight - stage.clientHeight) / 2;
+  }
+
   function closePreview(noFocus) {
     if (!previewState.open) return;
     previewState.open = false;
@@ -2366,6 +2688,9 @@
       $('preview-stage').removeChild(previewState.original);
       previewState.original = null;
     }
+    previewState.zoomed = false;
+    clearTimeout(previewState.tapTimer);
+    previewState.tapTimer = 0;
     clearTimeout(previewState.tipTimer);
     previewState.tipTimer = 0;
     var modal = $('preview-modal');
@@ -2400,7 +2725,7 @@
     $('preview-img').hidden = true;
     previewState.original.hidden = false;
     $('preview-compare').setAttribute('aria-pressed', 'true');
-    $('preview-modal').className = 'preview-modal is-open is-comparing';
+    $('preview-modal').className = 'preview-modal is-open is-comparing' + (previewState.zoomed ? ' is-zoomed' : '');
   }
 
   function showDevelopedPreview() {
@@ -2409,7 +2734,7 @@
     previewState.original.hidden = true;
     $('preview-img').hidden = false;
     $('preview-compare').setAttribute('aria-pressed', 'false');
-    if (previewState.open) $('preview-modal').className = 'preview-modal is-open';
+    if (previewState.open) $('preview-modal').className = 'preview-modal is-open' + (previewState.zoomed ? ' is-zoomed' : '');
   }
 
   function bindPreviewComparison() {
@@ -2473,8 +2798,6 @@
       leak: Math.random() < 0.3,
       dust: Math.random() < 0.5
     };
-    state.material = pickMaterial();
-
     // 等存档读回（最多 1.5 秒）再出片，编号和卡册才不会被迟到的读数覆盖
     saved.ready.then(function () { setTimeout(function () {
       try {
@@ -2499,6 +2822,7 @@
         if (saved.count.state === 'pending') saved.count.rounds += 1;
         else saveCount();
         var prevCollectedLen = state.collected.length;
+        state.material = pickMaterial();
         collectMaterial(state.material);
         state.isNewMaterial = state.collected.length > prevCollectedLen;
         state.tempPath = '';
@@ -2552,16 +2876,21 @@
 
   function savePhoto() {
     if (state.busy || !state.cardUrl) return;
+    resetSaveFeedback('save-photo');
+    var btn = $('save-photo');
+    var label = btn.querySelector('span');
     state.busy = true;
-    $('save-photo').disabled = true;
+    btn.disabled = true;
     setStatus('result-status', '正在存…');
     var round = state.round;
     ensureTempFile().then(Bridge.saveImage).then(function () {
-      if (round === state.round) state.keptRound = round;   // 真的存进相册了，「再冲一张」不用再确认
+      if (round !== state.round) return;
+      state.keptRound = round;   // 真的存进相册了，「再冲一张」不用再确认
+      if (label) showSaveFeedback('save-photo', label, '✓ 已存相册');
       setStatus('result-status', '已经存到相册了。');
     }, function (err) {
-      setStatus('result-status', failText(err, '存相册'));
-    }).then(function () { releaseBusy(); $('save-photo').disabled = false; });
+      if (round === state.round) setStatus('result-status', failText(err, '存相册'));
+    }).then(function () { releaseBusy(); btn.disabled = false; });
   }
 
   function postNote() {
@@ -2580,6 +2909,7 @@
   function again() {
     closeBinder(true);
     closeCard(true);
+    resetSaveFeedback('save-photo');
     clearFlash();
     document.body.className = '';
     state.base = null; state.cardUrl = ''; state.cardInfo = null; state.tempPath = ''; state.photo = null; state.material = '';
@@ -2643,6 +2973,7 @@
       else closeCard();
     });
     $('save-card').addEventListener('click', saveCard);
+    $('open-binder-intro').addEventListener('click', openBinder);
     $('open-binder-result').addEventListener('click', openBinder);
     $('open-binder-card').addEventListener('click', openBinder);
     $('close-binder').addEventListener('click', closeBinder);
@@ -2650,19 +2981,65 @@
     $('post-note').addEventListener('click', postNote);
     $('open-preview').addEventListener('click', openPreview);
     $('close-preview').addEventListener('click', function (e) { e.stopPropagation(); closePreview(); });
-    $('preview-modal').addEventListener('click', function () { closePreview(); });
+    $('preview-modal').addEventListener('click', function (e) {
+      if (e.target === $('preview-img') || e.target === previewState.original) {
+        var now = Date.now();
+        if (now - previewState.lastTapTs < 260) {
+          clearTimeout(previewState.tapTimer);
+          previewState.tapTimer = 0;
+          previewState.lastTapTs = 0;
+          togglePreviewZoom();
+          return;
+        }
+        previewState.lastTapTs = now;
+        clearTimeout(previewState.tapTimer);
+        previewState.tapTimer = setTimeout(function () {
+          previewState.tapTimer = 0;
+          if (!previewState.zoomed) closePreview();
+        }, 260);
+        return;
+      }
+      closePreview();
+    });
+    (function bindDevReselect() {
+      var btn = $('dev-reselect'), armed = 0, t = 0;
+      function reset() {
+        clearTimeout(t); t = 0; armed = 0;
+        btn.textContent = '重选';
+        btn.className = 'dev-reselect-btn';
+      }
+      btn.addEventListener('click', function () {
+        if (Date.now() > armed) {
+          armed = Date.now() + 2600;
+          clearTimeout(t);
+          t = setTimeout(reset, 2600);
+          btn.textContent = '确认重选';
+          btn.className = 'dev-reselect-btn is-armed';
+          return;
+        }
+        reset();
+        stopDevelopLoop();
+        state.sweetBuzzedRound = -1;
+        var ds = $('screen-develop');
+        if (ds) ds.className = 'screen screen-develop';
+        show('intro');
+      });
+    }());
     bindPreviewComparison();
     bindAgainConfirm();
     window.addEventListener('resize', function () {
       fitTrays();
       fitCard();
       fitCrop();
+      if (previewState.zoomed) fitPreviewZoom();
     });
     fitTrays();
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
         if (cropState) {
           cropState.drag = null;
+          cropState.pointers = [];
+          cropState.pinchDist = 0;
           clearTimeout(cropState.gridTimer);
           cropState.gridTimer = 0;
           $('crop-frame').className = 'crop-frame';

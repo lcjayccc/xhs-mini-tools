@@ -25,14 +25,26 @@
     <div class="safelight" id="safelight" aria-hidden="true">
       <div class="safelight-lamp"></div>
     </div>
+    <div class="darkroom-grain" aria-hidden="true"></div>
     <div class="light-flash" id="light-flash" aria-hidden="true"></div>
 
     <!-- 首屏：JS 未运行时也能看懂这是什么 -->
     <section class="screen screen-intro" id="screen-intro">
       <header class="topbar" id="topbar">
-        <div class="brand-badge">
-          <span class="lamp-dot" aria-hidden="true"></span>
-          <span class="brand-code">DARKROOM LAB · 35MM</span>
+        <div class="intro-top-row">
+          <div class="brand-badge">
+            <span class="lamp-dot" aria-hidden="true"></span>
+            <span class="brand-code">DARKROOM LAB · 35MM</span>
+          </div>
+          <button type="button" class="card-bar-btn intro-binder-btn" id="open-binder-intro" aria-label="打开暗房卡册" hidden>
+            <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+              <rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="11" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <span>卡册 <span id="binder-count-intro">0/9</span></span>
+          </button>
         </div>
         <h1 class="intro-title">暗房冲印店</h1>
         <p class="intro-sub">红灯下，亲手洗出你的胶片</p>
@@ -91,7 +103,7 @@
         </div>
       </div>
       <div class="crop-controls">
-        <p class="crop-hint" id="crop-hint">拖动裁剪框，选好要冲印的范围</p>
+        <p class="crop-hint" id="crop-hint"></p>
         <div class="crop-ratios" id="crop-ratios" role="group" aria-label="裁剪比例">
           <div class="crop-ratio-presets">
             <button class="crop-ratio-btn" type="button" data-ratio="original" aria-pressed="true">
@@ -111,21 +123,21 @@
               <span class="crop-ico crop-ico-11" aria-hidden="true"></span>
               <span class="crop-ratio-txt">方幅 <span class="crop-ratio-number">1:1</span></span>
             </button>
-            <button class="crop-ratio-btn crop-card-ratio" id="crop-card-ratio" type="button" data-ratio="card" aria-pressed="false" hidden>
+            <button class="crop-ratio-btn crop-card-ratio" id="crop-card-ratio" type="button" data-ratio="card" aria-pressed="false">
               <span class="crop-ico crop-ico-card" aria-hidden="true"></span>
               <span class="crop-ratio-txt">小卡同框</span>
-              <span class="crop-ratio-detail">3:4 竖幅</span>
+              <span class="crop-ratio-detail">55:85</span>
             </button>
           </div>
         </div>
         <div class="crop-zoom">
-          <span class="crop-zoom-val" id="crop-zoom-val" aria-hidden="true">1.0×</span>
+          <button type="button" class="crop-zoom-val" id="crop-zoom-val" aria-label="轻点重置缩放为 1 倍">1.0×</button>
           <div class="crop-scrubber">
             <input id="crop-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="放大倍数" />
           </div>
         </div>
         <div class="crop-actions">
-          <button class="btn btn-primary" id="crop-apply" type="button">用这张底片</button>
+          <button class="btn btn-primary" id="crop-apply" type="button">放入显影盘</button>
         </div>
         <p class="status" id="crop-status" role="status"></p>
       </div>
@@ -133,12 +145,13 @@
 
     <!-- 显影 -->
     <section class="screen screen-develop" id="screen-develop" hidden>
-      <header class="topbar">
+      <header class="topbar dev-topbar">
         <ol class="steps" aria-label="冲洗步骤">
           <li class="is-on"><span class="step-num">01</span>显影</li>
           <li><span class="step-num">02</span>定影</li>
           <li><span class="step-num">03</span>开灯</li>
         </ol>
+        <button type="button" class="dev-reselect-btn" id="dev-reselect" aria-label="放弃当前显影，返回重选照片">重选</button>
       </header>
       <div class="stage">
         <div class="tray" id="tray">
@@ -214,7 +227,7 @@
             <rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
             <rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
           </svg>
-          <span>卡册 <span id="binder-count-result">0/6</span></span>
+          <span>卡册 <span id="binder-count-result">0/9</span></span>
         </button>
       </header>
       <div class="result-scroll">
@@ -281,7 +294,7 @@
             <rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
             <rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
           </svg>
-          <span>卡册 <span id="binder-count-card">0/6</span></span>
+          <span>卡册 <span id="binder-count-card">0/9</span></span>
         </button>
       </div>
 
@@ -306,28 +319,26 @@
                   <span class="holo-edge-slice es-10"></span>
                 </div>
 
-                <!-- 正面：厚卡纸底板、烫箔包边、照片窗和动态反光 -->
+                <!-- 正面：55:85 全出血满版显像 + 材质专属镂空烫箔微框 + 右下角稀有度微章 -->
                 <div class="holo-face holo-front" id="holo-front" data-material="rainbow">
+                  <div class="holo-stock">
+                    <div class="holo-photo-frame">
+                      <canvas id="card-photo" width="440" height="680"></canvas>
+                    </div>
+                    <div class="holo-scrim" aria-hidden="true"></div>
+                    <div class="holo-front-meta">
+                      <span class="holo-front-no" id="card-front-no">NO.0001</span>
+                      <div class="holo-front-badge">
+                        <span class="holo-front-mat" id="card-front-mat">柔虹</span>
+                        <span class="holo-rarity-mark" id="card-front-rarity"></span>
+                      </div>
+                    </div>
+                  </div>
                   <div class="holo-trim" aria-hidden="true">
                     <span class="trim-corner trim-tl"></span>
                     <span class="trim-corner trim-tr"></span>
                     <span class="trim-corner trim-bl"></span>
                     <span class="trim-corner trim-br"></span>
-                  </div>
-                  <div class="holo-stock">
-                    <div class="holo-photo-frame">
-                      <canvas id="card-photo" width="450" height="600"></canvas>
-                    </div>
-                    <div class="holo-front-meta">
-                      <div class="holo-front-left">
-                        <span class="holo-front-lab">DARKROOM · 35MM</span>
-                        <span class="holo-front-no" id="card-front-no">NO.0001</span>
-                      </div>
-                      <div class="holo-front-right">
-                        <span class="holo-front-mat" id="card-front-mat">彩虹</span>
-                        <span class="holo-rarity-mark" id="card-front-rarity"></span>
-                      </div>
-                    </div>
                   </div>
                   <div class="holo-fx" id="holo-fx" aria-hidden="true">
                     <div class="holo-foil"></div>
@@ -337,7 +348,7 @@
                   </div>
                 </div>
 
-                <!-- 背面：全系列统一暗房图腾 × 多层光圈视差景深（不剧透材质与稀有度） -->
+                <!-- 背面：揭晓前统一暗房图腾（不剧透）→ 揭晓后展开专属冲印档案 -->
                 <div class="holo-face holo-back" id="holo-back">
                   <div class="holo-back-watermark" id="holo-back-watermark" aria-hidden="true"></div>
                   <div class="holo-back-shine" id="holo-back-shine" aria-hidden="true"></div>
@@ -377,6 +388,15 @@
                       </svg>
                       <span class="emblem-cn">暗房冲印店</span>
                     </div>
+                    <div class="holo-back-archive" id="holo-back-archive">
+                      <p class="archive-title" id="card-back-title">刚刚好的一张</p>
+                      <div class="archive-spec">
+                        <span class="archive-mat" id="card-back-mat">柔虹</span>
+                        <span class="archive-sep" aria-hidden="true">·</span>
+                        <span class="archive-code" id="card-back-rarity">常驻典藏 R</span>
+                      </div>
+                      <p class="archive-origin" id="card-back-origin">光斜过来时，刚好掠过一道虹</p>
+                    </div>
                     <div class="holo-back-stamp">
                       <span id="card-back-date">2026.11.19</span>
                       <span class="stamp-sep">&lt; <span id="card-back-no">No.0001</span> &gt;</span>
@@ -402,7 +422,7 @@
 
       <div class="card-modal-actions">
         <button type="button" class="btn btn-ghost" id="card-framing-entry" hidden>调整构图</button>
-        <button type="button" class="btn btn-primary is-pending" id="save-card" disabled>存这张小卡</button>
+        <button type="button" class="btn btn-primary is-pending" id="save-card" disabled>珍藏这张小卡</button>
       </div>
     </div>
 
@@ -417,8 +437,14 @@
         </button>
         <div class="binder-head-meta">
           <span class="binder-title">暗房卡册</span>
-          <span class="binder-count" id="card-collect-count">已收集 0/6</span>
+          <span class="binder-count" id="card-collect-count">已收集 0/9</span>
+          <span class="binder-complete-seal" id="binder-complete-seal" hidden>全图鉴</span>
         </div>
+      </div>
+      <div class="binder-progress" id="binder-progress" aria-hidden="true">
+        <span class="bp-seg"></span><span class="bp-seg"></span><span class="bp-seg"></span>
+        <span class="bp-seg"></span><span class="bp-seg"></span><span class="bp-seg"></span>
+        <span class="bp-seg"></span><span class="bp-seg"></span><span class="bp-seg"></span>
       </div>
       <div class="binder-scroll">
         <div class="binder-sheet">

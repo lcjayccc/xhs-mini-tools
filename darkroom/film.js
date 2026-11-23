@@ -4,7 +4,7 @@
 
   var PORTRAIT = { w: 900, h: 1200 };
   var LANDSCAPE = { w: 1200, h: 900 };
-  var CARD_PHOTO_ASPECT = 3 / 4;
+  var CARD_PHOTO_ASPECT = 55 / 85;
   var BUCKETS = 16;
   var DEV_MIN = 0.4;
   var DEV_MAX = 2.0;
@@ -65,11 +65,11 @@
     var scale = Math.min(1, target.w / crop.w, target.h / crop.h);
     var width = Math.max(1, Math.round(crop.w * scale));
     var height = Math.max(1, Math.round(crop.h * scale));
-    // 成片按 3:4 成组取整，避免小卡因像素取整再次裁切。
+    // 成片按 55:85 (11:17) 成组取整，避免全出血小卡因像素取整再次裁切。
     if (bounds && Math.abs(crop.w / crop.h - CARD_PHOTO_ASPECT) < 1e-9) {
-      var units = Math.max(1, Math.round(crop.h * scale / 4));
-      width = units * 3;
-      height = units * 4;
+      var units = Math.max(1, Math.round(crop.h * scale / 17));
+      width = units * 11;
+      height = units * 17;
     }
     var out = makeCanvas(width, height);
     var ctx = out.getContext('2d');
@@ -399,14 +399,17 @@
   }
 
   /* ---------- 小卡晒图 1080x1440：卡背斜放在后，正面装在卡套里在前，定格一道镭射光 ---------- */
-  // 每种材质的卡纸、烫箔线、文字颜色，以及定格光带的颜色（与 style.css 的六种材质对应）
+  // 每种材质的卡纸、烫箔线、文字颜色，以及定格光带的颜色（与 style.css 的材质对应）
   var CARD_PAINT = {
-    prism:   { stock: '#1d2340', trim: '#9fbaff', text: '#e4eaff', sub: 'rgba(228,234,255,0.55)', band: ['rgba(80,220,255,0.55)', 'rgba(170,110,255,0.6)', 'rgba(255,214,120,0.5)'] },
-    rainbow: { stock: '#f3ede2', trim: '#b9b4ab', text: '#3a2f28', sub: 'rgba(58,47,40,0.5)',     band: ['rgba(255,120,150,0.35)', 'rgba(255,230,120,0.35)', 'rgba(120,230,200,0.35)', 'rgba(130,160,255,0.35)'] },
-    sparkle: { stock: '#2a211d', trim: '#d9b77a', text: '#f1e2c4', sub: 'rgba(241,226,196,0.5)',  band: ['rgba(255,214,150,0.35)', 'rgba(255,190,120,0.45)'] },
-    pearl:   { stock: '#f4f1ec', trim: '#ddd5ca', text: '#4a4038', sub: 'rgba(74,64,56,0.5)',     band: ['rgba(255,190,215,0.3)', 'rgba(200,240,255,0.3)', 'rgba(255,250,235,0.35)'] },
-    etched:  { stock: '#1c1c1e', trim: '#8b8f96', text: '#d6d9de', sub: 'rgba(214,217,222,0.5)',  band: ['rgba(200,210,225,0.25)', 'rgba(230,236,245,0.3)'] },
-    chrome:  { stock: '#b9bec5', trim: '#ffffff', text: '#2a2d31', sub: 'rgba(42,45,49,0.55)',    band: ['rgba(255,255,255,0.0)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0.0)'] }
+    prism:   { stock: '#1d2340', trim: '#9fbaff', text: '#e4eaff', sub: 'rgba(228,234,255,0.55)', band: ['rgba(80,220,255,0.55)', 'rgba(170,110,255,0.60)', 'rgba(255,214,120,0.50)'] },
+    noir:    { stock: '#230b0a', trim: '#f4cc84', text: '#fce4b4', sub: 'rgba(252,228,180,0.60)', band: ['rgba(220,52,38,0.42)', 'rgba(248,204,128,0.48)', 'rgba(196,42,30,0.34)'] },
+    cateye:  { stock: '#281830', trim: '#e8c6f2', text: '#f6e4fc', sub: 'rgba(246,228,252,0.55)', band: ['rgba(196,146,224,0.30)', 'rgba(255,228,244,0.72)', 'rgba(206,162,238,0.32)'] },
+    sparkle: { stock: '#2a211d', trim: '#d9b77a', text: '#f1e2c4', sub: 'rgba(241,226,196,0.50)', band: ['rgba(255,214,150,0.35)', 'rgba(255,190,120,0.45)'] },
+    etched:  { stock: '#1c1c1e', trim: '#8b8f96', text: '#d6d9de', sub: 'rgba(214,217,222,0.50)', band: ['rgba(200,210,225,0.25)', 'rgba(230,236,245,0.30)'] },
+    chrome:  { stock: '#b9bec5', trim: '#ffffff', text: '#2a2d31', sub: 'rgba(42,45,49,0.55)',    band: ['rgba(255,255,255,0.00)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0.00)'] },
+    sunleak: { stock: '#3b1c12', trim: '#ffc68e', text: '#ffe8cf', sub: 'rgba(255,232,207,0.55)', band: ['rgba(255,116,56,0.54)', 'rgba(255,184,104,0.36)', 'rgba(255,226,160,0.16)'] },
+    pearl:   { stock: '#f4f1ec', trim: '#ddd5ca', text: '#4a4038', sub: 'rgba(74,64,56,0.50)',    band: ['rgba(255,190,215,0.30)', 'rgba(200,240,255,0.30)', 'rgba(255,250,235,0.35)'] },
+    rainbow: { stock: '#f3ede2', trim: '#b9b4ab', text: '#3a2f28', sub: 'rgba(58,47,40,0.50)',    band: ['rgba(255,120,150,0.35)', 'rgba(255,230,120,0.35)', 'rgba(120,230,200,0.35)', 'rgba(130,160,255,0.35)'] }
   };
   var SERIF = '"Songti SC", "STSong", "SimSun", serif';
   var MONO = '"SF Mono", Menlo, Consolas, monospace';
@@ -445,58 +448,66 @@
     ctx.fillStyle = 'rgba(236,220,210,0.55)';
     ctx.textAlign = 'center';
     ctx.font = '15px ' + MONO;
-    ctx.fillText('SAFETY FILM · 35MM', 0, -h / 2 + 70);
-    ctx.font = '20px ' + MONO;
-    ctx.fillText('DARKROOM LAB', 0, -h * 0.13);
-    // 光圈徽章：同心圆 + 六片叶片 + 中心红点
-    var R = w * 0.14;
+    ctx.fillText('SAFETY FILM · 35MM', 0, -h / 2 + 66);
+    ctx.font = '18px ' + MONO;
+    ctx.fillText('DARKROOM LAB', 0, -h * 0.21);
+    // 把光圈徽章上移，给下方的冲印档案留空间。
+    var cy = -h * 0.06, R = w * 0.125;
     ctx.strokeStyle = 'rgba(214,190,160,0.6)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, cy, R, 0, Math.PI * 2); ctx.stroke();
     ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.78, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, cy, R * 0.78, 0, Math.PI * 2); ctx.stroke();
     for (var k = 0; k < 6; k++) {
       var a = k * Math.PI / 3;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * R * 0.78, Math.sin(a) * R * 0.78);
-      ctx.lineTo(Math.cos(a + 2.1) * R * 0.32, Math.sin(a + 2.1) * R * 0.32);
+      ctx.moveTo(Math.cos(a) * R * 0.78, cy + Math.sin(a) * R * 0.78);
+      ctx.lineTo(Math.cos(a + 2.1) * R * 0.32, cy + Math.sin(a + 2.1) * R * 0.32);
       ctx.stroke();
     }
     ctx.fillStyle = '#d2412f';
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.09, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(236,220,210,0.8)';
-    ctx.font = '34px ' + SERIF;
-    ctx.fillText('暗房冲印店', 0, R + 60);
+    ctx.beginPath(); ctx.arc(0, cy, R * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(236,220,210,0.82)';
+    ctx.font = '28px ' + SERIF;
+    ctx.fillText('暗房冲印店', 0, cy + R + 44);
+    var archY = cy + R + 76;
+    ctx.strokeStyle = 'rgba(226,194,170,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-w * 0.34, archY); ctx.lineTo(w * 0.34, archY); ctx.stroke();
+    ctx.fillStyle = 'rgba(246,235,226,0.92)';
+    ctx.font = '26px ' + SERIF;
+    ctx.fillText(info.title || '刚刚好的一张', 0, archY + 42, w * 0.68);
+    ctx.fillStyle = 'rgba(226,200,184,0.86)';
+    ctx.font = '18px ' + MONO;
+    ctx.fillText([info.name, info.rarity, info.code].filter(Boolean).join(' · '), 0, archY + 76, w * 0.68);
+    if (info.origin) {
+      ctx.fillStyle = 'rgba(200,171,160,0.78)';
+      ctx.font = '17px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.fillText(info.origin, 0, archY + 108, w * 0.68);
+    }
     // 冲印机背码
-    ctx.fillStyle = 'rgba(236,220,210,0.5)';
+    ctx.fillStyle = 'rgba(236,220,210,0.55)';
     ctx.font = '15px ' + MONO;
-    ctx.fillText(info.date + '   < ' + info.no + ' >   C-41 · 35MM', 0, h / 2 - 52);
+    ctx.fillText(info.date + '   < ' + info.no + ' >   C-41 · 35MM', 0, h / 2 - 48);
     ctx.restore();
   }
 
   function drawCardFront(ctx, photo, w, h, info) {
     var paint = CARD_PAINT[info.material] || CARD_PAINT.rainbow;
-    var r = w * 0.047, m = w * 0.036;
+    var r = w * 0.047, trimInset = Math.round(w * 0.024);
     ctx.save();
     roundRectPath(ctx, -w / 2, -h / 2, w, h, r);
-    ctx.fillStyle = paint.stock; ctx.fill();
+    ctx.fillStyle = '#140e0d'; ctx.fill();
     ctx.clip();
-    if (info.material === 'chrome') {
-      // 拉丝银：细密的水平线
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      for (var ly = -h / 2; ly < h / 2; ly += 3) ctx.fillRect(-w / 2, ly, w, 1);
-    }
-    // 与页面小卡共用 3:4 照片窗和裁切区域。
-    var px = -w / 2 + m, py = -h / 2 + m, pw = w - m * 2, ph = pw * 4 / 3;
-    ctx.save();
-    roundRectPath(ctx, px, py, pw, ph, r * 0.3);
-    ctx.clip();
-    paintCardPhoto(ctx, photo, px, py, pw, ph, info.photoBounds);
-    ctx.restore();
-    // 烫箔内框
-    ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.85; ctx.lineWidth = 2;
-    roundRectPath(ctx, px - 5, py - 5, pw + 10, ph + 10, r * 0.4); ctx.stroke();
-    ctx.globalAlpha = 1;
-    // 定格的镭射光：一条斜向光带，只在光带里提亮，照片其余部分不动
+    // 55:85 全出血满版照片，直抵实体卡圆角
+    paintCardPhoto(ctx, photo, -w / 2, -h / 2, w, h, info.photoBounds);
+
+    // 底部极轻暗角托底（保证亮色照片上右下角微章清晰可读）
+    var scrim = ctx.createLinearGradient(0, h * 0.28, 0, h / 2);
+    scrim.addColorStop(0, 'rgba(12,8,8,0)');
+    scrim.addColorStop(0.65, 'rgba(12,8,8,0.40)');
+    scrim.addColorStop(1, 'rgba(12,8,8,0.68)');
+    ctx.fillStyle = scrim; ctx.fillRect(-w / 2, h * 0.28, w, h * 0.22);
+
+    // 定格的镭射光带
     var band = ctx.createLinearGradient(-w * 0.55, -h * 0.5, w * 0.35, h * 0.25);
     band.addColorStop(0, 'rgba(0,0,0,0)');
     var n = paint.band.length;
@@ -506,7 +517,6 @@
     ctx.globalCompositeOperation = 'screen';
     ctx.fillStyle = band; ctx.fillRect(-w / 2, -h / 2, w, h);
     if (info.material === 'sparkle') {
-      // 光带里的闪粉颗粒
       ctx.fillStyle = 'rgba(255,236,190,0.9)';
       for (var d = 0; d < 140; d++) {
         var t = rand(0.3, 0.62), off = rand(-0.12, 0.12);
@@ -516,27 +526,61 @@
       }
       ctx.globalAlpha = 1;
     } else if (info.material === 'etched') {
-      // 蚀刻线只在光点附近浮现
       ctx.strokeStyle = 'rgba(225,232,242,0.35)'; ctx.lineWidth = 1;
       for (var c = 1; c <= 6; c++) { ctx.beginPath(); ctx.arc(-w * 0.12, -h * 0.14, c * w * 0.05, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (info.material === 'noir') {
+      // 暗房红印：边角安全灯红晕
+      var redLeak = ctx.createRadialGradient(-w * 0.32, -h * 0.34, 0, -w * 0.32, -h * 0.34, w * 0.72);
+      redLeak.addColorStop(0, 'rgba(232,62,46,0.42)');
+      redLeak.addColorStop(0.5, 'rgba(196,42,30,0.14)');
+      redLeak.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = redLeak; ctx.fillRect(-w / 2, -h / 2, w, h);
+    } else if (info.material === 'cateye') {
+      // 丝绒猫眼：中心聚光柔核
+      var catGlow = ctx.createRadialGradient(-w * 0.08, -h * 0.06, 0, -w * 0.08, -h * 0.06, w * 0.42);
+      catGlow.addColorStop(0, 'rgba(255,234,248,0.44)');
+      catGlow.addColorStop(0.5, 'rgba(206,154,234,0.16)');
+      catGlow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = catGlow; ctx.fillRect(-w / 2, -h / 2, w, h);
+    } else if (info.material === 'sunleak') {
+      // 暖阳漏光：左缘胶片日落暖橙溢光
+      var sunEdge = ctx.createLinearGradient(-w / 2, -h * 0.2, -w * 0.12, -h * 0.05);
+      sunEdge.addColorStop(0, 'rgba(255,112,52,0.52)');
+      sunEdge.addColorStop(0.45, 'rgba(255,184,102,0.22)');
+      sunEdge.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sunEdge; ctx.fillRect(-w / 2, -h / 2, w, h);
     }
-    // 光点眩光
     var glare = ctx.createRadialGradient(-w * 0.12, -h * 0.14, 0, -w * 0.12, -h * 0.14, w * 0.5);
-    glare.addColorStop(0, 'rgba(255,255,255,0.22)');
+    glare.addColorStop(0, 'rgba(255,255,255,0.20)');
     glare.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = glare; ctx.fillRect(-w / 2, -h / 2, w, h);
     ctx.globalCompositeOperation = 'source-over';
-    // 底部印刷栏
-    var by = (py + ph + h / 2) / 2 - 5;
+
+    // 材质专属镂空烫箔内框（6px 安全区内，不切割人像）
+    ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.72; ctx.lineWidth = 2;
+    roundRectPath(ctx, -w / 2 + trimInset, -h / 2 + trimInset, w - trimInset * 2, h - trimInset * 2, r * 0.65);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // 左下极淡编号 + 右下角精致稀有度微章
+    var metaY = h / 2 - 30;
     ctx.textAlign = 'left';
-    ctx.fillStyle = paint.sub; ctx.font = '13px ' + MONO;
-    ctx.fillText('DARKROOM LAB · 35MM', -w / 2 + m, by - 8);
-    ctx.fillStyle = paint.text; ctx.font = '20px ' + MONO;
-    ctx.fillText(info.no.toUpperCase(), -w / 2 + m, by + 20);
-    ctx.textAlign = 'right';
-    ctx.font = '26px ' + SERIF;
-    ctx.fillText(info.name + '  ' + info.mark + ' ' + info.code, w / 2 - m, by + 18);
+    ctx.fillStyle = 'rgba(255,246,238,0.68)'; ctx.font = '16px ' + MONO;
+    ctx.fillText(info.no.toUpperCase(), -w / 2 + 26, metaY);
+
+    var badgeText = info.name + '  ' + info.mark + ' ' + info.code;
+    ctx.font = '600 20px ' + SERIF;
+    var bw = Math.max(132, Math.round(ctx.measureText(badgeText).width + 30));
+    var bh = 36, bx = w / 2 - 24 - bw, by = h / 2 - 22 - bh;
+    roundRectPath(ctx, bx, by, bw, bh, bh / 2);
+    ctx.fillStyle = 'rgba(16,10,10,0.56)'; ctx.fill();
+    ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.68; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff6ed';
+    ctx.fillText(badgeText, bx + bw / 2, by + 25);
     ctx.restore();
+
     // 卡纸切边高光
     ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5;
     roundRectPath(ctx, -w / 2 + 0.75, -h / 2 + 0.75, w - 1.5, h - 1.5, r); ctx.stroke();
@@ -552,7 +596,7 @@
     var glow = ctx.createRadialGradient(W / 2, -120, 0, W / 2, -120, 900);
     glow.addColorStop(0, 'rgba(190,40,25,0.35)'); glow.addColorStop(1, 'rgba(190,40,25,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-    var cw = 530, ch = Math.round(cw * 85 / 55);
+    var cw = 528, ch = 816;
     // 后景：卡背，向右错开、顺时针斜放
     ctx.save();
     ctx.translate(W / 2 + 235, 650); ctx.rotate(6 * Math.PI / 180);
