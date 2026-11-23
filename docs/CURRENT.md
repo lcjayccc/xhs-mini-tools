@@ -6,7 +6,7 @@
 
 | 工具 | 代码版本 | 平台状态 | 下一步 |
 |---|---|---|---|
-| darkroom（暗房冲印店） | 1.3.0 候选：提交 `538527c` + 工作区**未提交**的第二批改动（`darkroom/` 三个文件），未验收，未打 tag；上一个验收版 1.2.0（tag `darkroom/v1.2.0`） | **从未上传**：`redapp list`（正式环境、来源 thirdAgent）返回 0 个小工具（2026-11-19 查询） | Codex 接手：先读 `tasks/T-14-界面精修/交接.md`。界面精修（T-14）收尾：提交（要 Kaisa 授权）→ 模拟器和真机验收 → 换示例底片 → 打 tag。之后讨论小卡材质规则（T-13），再做流体显影（T-07）；上架（T-02）排在后面 |
+| darkroom（暗房冲印店） | 1.3.0 候选：第一批 `538527c`、第二批 `c9215d2`（都已推送），未验收，未打 tag；上一个验收版 1.2.0（tag `darkroom/v1.2.0`） | **从未上传**：`redapp list`（正式环境、来源 thirdAgent）返回 0 个小工具（2026-11-19 查询） | Codex 接手：先读 `tasks/T-14-界面精修/交接.md`。界面精修（T-14）收尾：模拟器和真机验收 → 换示例底片 → 打 tag。之后讨论小卡材质规则（T-13），再做流体显影（T-07）；上架（T-02）排在后面 |
 
 ## darkroom
 
@@ -20,7 +20,7 @@
 
 - Kaisa 2026-11-23：后续由 **Codex 接手**继续做。`AGENTS.md`「协作流程」写的是 Claude 总控、Gemini 网页版做前端、Codex 只读审查（理由见 `DECISIONS.md` D-01）；接手后分工要不要调整，待 Kaisa 定。
 - Gemini 网页版（Gemini Neon）的用法已验证（2026-11-21 至 11-23）：Agent 在自己的浏览器里打开原对话，用「导入代码」挂上 GitHub 仓库，Gemini 能读到已推送的最新提交；本地没推送的改动，要说明基线并给 sha256 让它在沙箱里重建。具体做法和坑见交接文件「和 Gemini 协作」。
-- 仓库已公开在 GitHub：https://github.com/lcjayccc/xhs-mini-tools （提交作者邮箱用 GitHub noreply）。远端停在 `538527c`，第二批没推送。
+- 仓库已公开在 GitHub：https://github.com/lcjayccc/xhs-mini-tools （提交作者邮箱用 GitHub noreply）。第二批已推送（`c9215d2`，2026-11-23）。
 - 本地测试工具在 `tools/`：模拟宿主测试页、不缓存的静态服务、受保护函数比对脚本，用法见交接文件「怎么验证」。
 - Gemini 只能用网页版：Gemini CLI 个人账号已停服，Antigravity 账号无权限（2026-11-18）。
 - redapp CLI 装在 `D:\DevTools\redapp-cli\npm-prefix`，运行前要在当前进程设置 npm prefix 和 cache，不要装回 C 盘。
