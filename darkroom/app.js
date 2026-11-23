@@ -4,24 +4,23 @@
 
   var Bridge = window.Bridge, Film = window.Film;
   var $ = function (id) { return document.getElementById(id); };
-  var screens = ['intro', 'develop', 'fix', 'result'];
+  var screens = ['intro', 'crop', 'develop', 'fix', 'result'];
 
   var BASE_RATE = 0.03;      // 不晃也会慢慢显影：约 33 秒到“刚好”
   var AGITATE_RATE = 0.055;  // 晃得越勤快越快：满速约 12 秒
   var FIX_SECONDS = 4;
   var COUNT_KEY = 'darkroom.count';
   var CARDS_KEY = 'darkroom.cards';
-  // 小卡材质，按稀有度从高到低；规则见 docs/tasks/T-03-小卡/映射规则.md
+  // 卡册展示顺序。抽取规则见 docs/tasks/T-03-小卡/映射规则.md。
   var MATERIALS = ['prism', 'rainbow', 'sparkle', 'pearl', 'etched', 'chrome'];
-  var PRISM_ROLL = 0.29;     // 完美操作下 Prism 约 1/10（35% 无瑕疵 × 0.29）
 
   var MATERIAL_META = {
-    prism:   { name: '棱镜', rarity: '最稀有', code: 'SR', tier: 'prism',   origin: '一点瑕疵都没有的那一张',     clue: '完美显影且无瑕，凭运气遇见' },
-    rainbow: { name: '彩虹', rarity: '普通',   code: 'C',  tier: 'common',  origin: '冲得还行的日常卡',           clue: '按部就班冲出一张好照片' },
-    sparkle: { name: '闪粉', rarity: '特别款', code: 'SP', tier: 'special', origin: '漏进来的光变成了闪粉',       clue: '碰上暗房漏光，就会出现' },
-    pearl:   { name: '珠光', rarity: '特别款', code: 'SP', tier: 'special', origin: '欠显，淡得像一段回忆',       clue: '早一点把相纸捞出来试试' },
-    etched:  { name: '蚀刻', rarity: '特别款', code: 'SP', tier: 'special', origin: '过显，黑得只剩轮廓',         clue: '让相纸在显影液里多泡一会儿' },
-    chrome:  { name: '银镜', rarity: '特别款', code: 'SP', tier: 'special', origin: '没定影完，相纸上还残留着银', clue: '定影还没做完就开灯看看' }
+    prism:   { name: '棱镜', rarity: '最稀有', code: 'SR', tier: 'prism',   origin: '碎光随角度变色', clue: '碎光在卡面折射' },
+    rainbow: { name: '彩虹', rarity: '普通',   code: 'C',  tier: 'common',  origin: '柔和的彩色光带', clue: '一条随角度变化的彩色光带' },
+    sparkle: { name: '闪粉', rarity: '特别款', code: 'SP', tier: 'special', origin: '细碎的闪点',     clue: '细小的光点时隐时现' },
+    pearl:   { name: '珠光', rarity: '特别款', code: 'SP', tier: 'special', origin: '柔和的贝母光泽', clue: '浅色卡面有贝母一样的光泽' },
+    etched:  { name: '蚀刻', rarity: '特别款', code: 'SP', tier: 'special', origin: '倾斜时浮现细线', clue: '光扫过时才看得清细线' },
+    chrome:  { name: '银镜', rarity: '特别款', code: 'SP', tier: 'special', origin: '镜面般的银光',   clue: '银白色的反光扫过卡面' }
   };
 
   var prismTexUrl = '';
@@ -33,7 +32,7 @@
     dev: 0, devTime: 0, agiSum: 0, agi: 0, agiTarget: 0,
     raf: 0, lastTs: 0, gyroOn: false, gyroRound: 0, gyroCbs: [],
     fix: 0, fixHolding: false, fixTimer: 0, lastFixSec: 0,
-    cardUrl: '', tempPath: '', count: 0, busy: false,
+    cardUrl: '', cardInfo: null, tempPath: '', count: 0, busy: false,
     material: '', collected: [], photo: null, round: 0,
     shotDate: '', isNewMaterial: false,
     lastRippleTs: 0, lastRippleX: 0, lastRippleY: 0,
@@ -41,7 +40,8 @@
   };
 
   var cardState = {
-    open: false, binderOpen: false,
+    open: false, binderOpen: false, framing: false,
+    photoBounds: null, framingBounds: null, framingDrag: null,
     flipped: true, revealed: false, revealing: false, revealTimer: 0,
     revealedRound: -1, shimmerRound: -1, cardOpener: null, binderOpener: null,
     raf: 0, lastTs: 0,
@@ -52,7 +52,8 @@
     thumb: null
   };
 
-  var previewState = { open: false, opener: null, tipTimer: 0 };
+  var previewState = { open: false, opener: null, tipTimer: 0, compareBy: null, original: null };
+  var cropState = null;
 
   function show(name) {
     if (name !== 'result' && previewState.open) closePreview(true);
@@ -576,10 +577,10 @@
       var file = e.target.files && e.target.files[0];
       if (!file || state.busy) return;
       state.busy = true;
-      setStatus('intro-status', '正在把照片放上药盘…');
-      Film.loadFile(file).then(function (canvas) {
+      setStatus('intro-status', '正在读取照片…');
+      Film.loadImage(file).then(function (image) {
         state.busy = false;
-        startDevelop(canvas);
+        startCrop(image);
       }, function () {
         state.busy = false;
         setStatus('intro-status', '这张照片读不出来，换一张试试。');
@@ -593,6 +594,136 @@
     });
     $('use-sample').disabled = false;
     setStatus('intro-status', '');
+  }
+
+  /* ---------- 选定裁剪范围 ---------- */
+  function paintCrop() {
+    var image = cropState.image;
+    var box = Film.cropBounds(image, cropState.ratio, cropState.zoom, cropState.x, cropState.y);
+    cropState.bounds = box;
+    cropState.x = (box.x + box.w / 2) / image.naturalWidth;
+    cropState.y = (box.y + box.h / 2) / image.naturalHeight;
+    var style = $('crop-box').style;
+    style.left = box.x / image.naturalWidth * 100 + '%';
+    style.top = box.y / image.naturalHeight * 100 + '%';
+    style.width = box.w / image.naturalWidth * 100 + '%';
+    style.height = box.h / image.naturalHeight * 100 + '%';
+  }
+
+  function fitCrop() {
+    if (!cropState) return;
+    var stage = $('crop-stage'), frame = $('crop-frame'), image = cropState.image;
+    var size = Math.min((stage.clientWidth - 32) / image.naturalWidth, (stage.clientHeight - 12) / image.naturalHeight);
+    frame.style.width = Math.max(1, image.naturalWidth * size) + 'px';
+    frame.style.height = Math.max(1, image.naturalHeight * size) + 'px';
+  }
+
+  function selectCropRatio(format) {
+    var image = cropState.image;
+    var horizontal = image.naturalWidth >= image.naturalHeight;
+    if (format === 'original') {
+      cropState.ratio = image.naturalWidth / image.naturalHeight;
+    } else if (format === 'card') {
+      cropState.ratio = Film.cardPhotoAspect;
+    } else {
+      var sides = format.split(':');
+      var ratio = Number(sides[0]) / Number(sides[1]);
+      cropState.ratio = horizontal ? ratio : 1 / ratio;
+    }
+    var buttons = $('crop-ratios').querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      var value = buttons[i].getAttribute('data-ratio');
+      var label = buttons[i].querySelector('.crop-ratio-number');
+      if (label) label.textContent = horizontal ? value : value.split(':').reverse().join(':');
+      buttons[i].setAttribute('aria-pressed', String(value === format));
+    }
+    $('crop-hint').textContent = cropState.ratio === Film.cardPhotoAspect
+      ? '拖动裁剪框，成片与小卡共用这一块画面' : '拖动裁剪框，选好要冲印的范围';
+    paintCrop();
+  }
+
+  function startCrop(image) {
+    cropState = { image: image, zoom: 1, x: 0.5, y: 0.5, drag: null };
+    image.className = 'crop-source';
+    image.draggable = false;
+    image.alt = '';
+    $('crop-frame').appendChild(image);
+    $('crop-zoom').value = '1';
+    var horizontal = image.naturalWidth >= image.naturalHeight;
+    $('crop-card-ratio').hidden = !horizontal;
+    $('crop-half-card-match').hidden = horizontal;
+    setStatus('crop-status', '');
+    setStatus('intro-status', '');
+    selectCropRatio('original');
+    show('crop');
+    fitCrop();
+    $('crop-title').focus();
+  }
+
+  function clearCrop() {
+    $('crop-frame').removeChild(cropState.image);
+    cropState = null;
+  }
+
+  function bindCrop() {
+    var frame = $('crop-frame');
+    var buttons = $('crop-ratios').querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function (e) {
+        selectCropRatio(e.currentTarget.getAttribute('data-ratio'));
+      });
+    }
+    $('crop-zoom').addEventListener('input', function (e) {
+      cropState.zoom = Number(e.target.value);
+      paintCrop();
+    });
+    frame.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0 || cropState.drag) return;
+      cropState.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      if (frame.setPointerCapture) { try { frame.setPointerCapture(e.pointerId); } catch (err) { /* 指针已释放 */ } }
+    });
+    frame.addEventListener('pointermove', function (e) {
+      var drag = cropState && cropState.drag;
+      if (!drag || drag.id !== e.pointerId) return;
+      var area = frame.getBoundingClientRect();
+      cropState.x += (e.clientX - drag.x) / area.width;
+      cropState.y += (e.clientY - drag.y) / area.height;
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      paintCrop();
+    });
+    function release(e) {
+      if (cropState && cropState.drag && cropState.drag.id === e.pointerId) cropState.drag = null;
+    }
+    frame.addEventListener('pointerup', release);
+    frame.addEventListener('pointercancel', release);
+    frame.addEventListener('lostpointercapture', release);
+    frame.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    var directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    frame.addEventListener('keydown', function (e) {
+      var direction = directions[e.key];
+      if (!direction) return;
+      e.preventDefault();
+      cropState.x += direction[0] * 0.02;
+      cropState.y += direction[1] * 0.02;
+      paintCrop();
+    });
+    $('crop-cancel').addEventListener('click', function () {
+      clearCrop();
+      show('intro');
+      $('pick-input').focus();
+    });
+    $('crop-apply').addEventListener('click', function () {
+      var photo;
+      try {
+        photo = Film.cropToCanvas(cropState.image, cropState.bounds);
+      } catch (err) {
+        setStatus('crop-status', '这张照片暂时无法裁剪，请返回重选。');
+        return;
+      }
+      clearCrop();
+      startDevelop(photo);
+    });
   }
 
   /* ---------- 显影 ---------- */
@@ -934,15 +1065,15 @@
     btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
-  /* ---------- 小卡材质：按顺序命中第一条 ---------- */
-  function pickMaterial(p) {
-    if (p.fix < 1) return 'chrome';      // 没定影完，残留着银
-    if (p.dev > 1.4) return 'etched';    // 过显，只剩轮廓
-    if (p.dev < 0.75) return 'pearl';    // 欠显，淡得像回忆
-    if (p.leak) return 'sparkle';        // 漏进来的光变成闪粉
-    var perfect = p.dev >= 0.9 && p.dev <= 1.12 && p.uneven <= 0.3 && !p.dust;
-    if (perfect && Math.random() < PRISM_ROLL) return 'prism';
-    return 'rainbow';
+  /* 每轮冲印独立抽取：普通 40%，四种特别款各 12.5%，棱镜 10%。 */
+  function pickMaterial() {
+    var roll = Math.random();
+    if (roll < 0.4) return 'rainbow';
+    if (roll < 0.525) return 'sparkle';
+    if (roll < 0.65) return 'pearl';
+    if (roll < 0.775) return 'etched';
+    if (roll < 0.9) return 'chrome';
+    return 'prism';
   }
 
   function collectMaterial(m) {
@@ -1063,6 +1194,7 @@
         e.preventDefault();
         if (previewState.open) closePreview();
         else if (cardState.binderOpen) closeBinder();
+        else if (cardState.framing) closeCardFraming();
         else closeCard();
         return;
       }
@@ -1368,6 +1500,7 @@
   }
 
   function openBinder(e) {
+    closeCardFraming(true);
     cardState.binderOpener = (e && e.currentTarget && typeof e.currentTarget.focus === 'function')
       ? e.currentTarget : document.activeElement;
     renderBinderGrid();
@@ -1401,8 +1534,8 @@
     if (state.photo) {
       try {
         var tc = document.createElement('canvas');
-        tc.width = 160; tc.height = 220;
-        Film.drawCover(state.photo, tc);
+        tc.width = 165; tc.height = 220;
+        Film.drawCardPhoto(state.photo, tc, cardState.photoBounds);
         cardState.thumb = { round: state.round, material: mat, url: tc.toDataURL('image/jpeg', 0.72) };
       } catch (err) { cardState.thumb = null; }
     }
@@ -1421,6 +1554,7 @@
 
     var saveBtn = $('save-card');
     if (saveBtn) {
+      saveBtn.hidden = false;
       saveBtn.disabled = state.busy;   // 上一次保存还没结束时先不让点，结束后由 saveCard 重新启用
       saveBtn.className = 'btn btn-primary';
     }
@@ -1434,7 +1568,9 @@
   }
 
   function triggerReveal() {
-    if (cardState.revealing || cardState.revealed) return;
+    if (cardState.framing || cardState.revealing || cardState.revealed) return;
+    $('card-framing-entry').hidden = true;
+    $('save-card').hidden = false;
     var mat = state.material || 'rainbow';
     var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
 
@@ -1505,7 +1641,7 @@
 
     if (state.photo) {
       var photoCanvas = $('card-photo');
-      Film.drawCover(state.photo, photoCanvas);
+      Film.drawCardPhoto(state.photo, photoCanvas, cardState.photoBounds);
     }
 
     updateBinderCounts();
@@ -1531,7 +1667,9 @@
     $('card-tip').textContent = '倾斜看光 · 轻点翻面';
 
     var saveBtn = $('save-card');
+    $('card-framing-entry').hidden = true;
     if (saveBtn) {
+      saveBtn.hidden = false;
       saveBtn.disabled = state.busy;
       saveBtn.className = 'btn btn-primary';
     }
@@ -1539,6 +1677,7 @@
 
   function openCard(e, opts) {
     if (!state.photo) return;
+    if (!cardState.photoBounds) cardState.photoBounds = Film.cardPhotoBounds(state.photo);
     cardState.openSeq = (cardState.openSeq || 0) + 1;   // 每次打开一个序号，存卡结果只回写发起它的那次
     var showFront = !!(opts && opts.alreadyRevealed && isCurrentRevealed());
     if (opts && opts.returnFocus) {
@@ -1567,9 +1706,12 @@
       $('card-caption').className = 'card-caption';
       $('card-caption-text').textContent = '';
       $('card-caption-new').hidden = true;
-      $('card-tip').textContent = '点击翻开';
+      var hasFraming = !isCurrentRevealed() && Math.abs(state.photo.width / state.photo.height - Film.cardPhotoAspect) > 0.01;
+      $('card-framing-entry').hidden = !hasFraming;
+      setUnrevealedCardTip();
       var saveBtn = $('save-card');
       if (saveBtn) {
+        saveBtn.hidden = hasFraming;
         saveBtn.disabled = true;
         saveBtn.className = 'btn btn-primary is-pending';
       }
@@ -1595,6 +1737,7 @@
 
   function closeCard(noFocus) {
     if (!cardState.open) return;
+    closeCardFraming(true);
     cardState.open = false;
     cardState.revealing = false;
     cardState.dragging = false;
@@ -1605,6 +1748,123 @@
     var opener = cardState.cardOpener;
     cardState.cardOpener = null;
     if (noFocus !== true) restoreFocus(opener);
+  }
+
+  function setUnrevealedCardTip() {
+    var tip = '轻点翻开';
+    if (!$('card-framing-entry').hidden) {
+      var side = state.photo.width / state.photo.height > Film.cardPhotoAspect ? '两侧' : '上下';
+      tip += ' · 小卡会裁去照片' + side;
+    }
+    $('card-tip').textContent = tip;
+  }
+
+  function renderCardFraming() {
+    var canvas = $('card-framing-canvas'), ctx = canvas.getContext('2d');
+    var crop = cardState.framingBounds, photo = state.photo;
+    var w = canvas.width, h = canvas.height;
+    var frameWidth = w / 2, frameHeight = frameWidth * crop.h / crop.w;
+    var left = (w - frameWidth) / 2, top = (h - frameHeight) / 2;
+    var scale = frameWidth / crop.w;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(photo, left - crop.x * scale, top - crop.y * scale,
+      photo.width * scale, photo.height * scale);
+    ctx.fillStyle = 'rgba(16, 7, 7, 0.68)';
+    ctx.fillRect(0, 0, w, top);
+    ctx.fillRect(0, top + frameHeight, w, top);
+    ctx.fillRect(0, top, left, frameHeight);
+    ctx.fillRect(left + frameWidth, top, left, frameHeight);
+    ctx.strokeStyle = '#f3d7c1';
+    ctx.strokeRect(left, top, frameWidth, frameHeight);
+  }
+
+  function openCardFraming() {
+    if (!cardState.open || cardState.revealing || $('card-framing-entry').hidden) return;
+    cardState.framingBounds = cardState.photoBounds;
+    renderCardFraming();
+    stopCardLoop();
+    stopCardGyro();
+    cardState.framing = true;
+    $('card-stage-inner').hidden = true;
+    $('card-framing').hidden = false;
+    $('open-binder-card').hidden = true;
+    $('close-card-label').textContent = '取消调整';
+    $('close-card').setAttribute('aria-label', '取消调整');
+    $('card-framing-entry').textContent = '用这个构图';
+    $('card-framing-entry').className = 'btn btn-primary';
+    restoreFocus($('card-framing-canvas'));
+  }
+
+  function closeCardFraming(silent) {
+    if (!cardState.framing) return;
+    cardState.framing = false;
+    cardState.framingBounds = null;
+    cardState.framingDrag = null;
+    $('card-framing').hidden = true;
+    $('card-stage-inner').hidden = false;
+    $('open-binder-card').hidden = false;
+    $('close-card-label').textContent = '返回相纸';
+    $('close-card').setAttribute('aria-label', '返回出片页');
+    $('card-framing-entry').textContent = '调整构图';
+    $('card-framing-entry').className = 'btn btn-ghost';
+    setUnrevealedCardTip();
+    if (!silent) {
+      fitCard();
+      startCardLoop();
+      startCardGyro();
+      restoreFocus($('card-framing-entry'));
+    }
+  }
+
+  function moveCardFraming(dx, dy) {
+    var crop = cardState.framingBounds, photo = state.photo;
+    cardState.framingBounds = Film.cardPhotoBounds(photo,
+      (crop.x + crop.w / 2 - dx) / photo.width, (crop.y + crop.h / 2 - dy) / photo.height);
+    renderCardFraming();
+  }
+
+  function bindCardFraming() {
+    var canvas = $('card-framing-canvas');
+    canvas.addEventListener('pointerdown', function (e) {
+      if (!cardState.framing || e.button !== 0 || cardState.framingDrag) return;
+      cardState.framingDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 指针已释放 */ } }
+    });
+    canvas.addEventListener('pointermove', function (e) {
+      var drag = cardState.framingDrag;
+      if (!drag || drag.id !== e.pointerId) return;
+      var width = canvas.getBoundingClientRect().width;
+      if (!width) return;
+      var units = 2 * cardState.framingBounds.w / width;
+      moveCardFraming((e.clientX - drag.x) * units, (e.clientY - drag.y) * units);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    });
+    function release(e) {
+      if (cardState.framingDrag && cardState.framingDrag.id === e.pointerId) cardState.framingDrag = null;
+    }
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
+    canvas.addEventListener('pointerleave', release);
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    var directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    canvas.addEventListener('keydown', function (e) {
+      var direction = directions[e.key];
+      if (!cardState.framing || !direction) return;
+      e.preventDefault();
+      var step = cardState.framingBounds.w * 0.05;
+      moveCardFraming(direction[0] * step, direction[1] * step);
+    });
+    $('card-framing-entry').addEventListener('click', function () {
+      if (cardState.framing) {
+        cardState.photoBounds = cardState.framingBounds;
+        Film.drawCardPhoto(state.photo, $('card-photo'), cardState.photoBounds);
+        closeCardFraming();
+      } else {
+        openCardFraming();
+      }
+    });
   }
 
   /* ---------- 陀螺仪倾斜小卡：容器只给角速度，累加成倾斜并让它慢慢回正，避免漂移 ---------- */
@@ -1652,6 +1912,7 @@
     var meta = MATERIAL_META[mat] || MATERIAL_META.rainbow;
     var no = 'No.' + pad(state.shotNo || state.count, 4);
     var shot = Film.composePhotocard(state.photo, {
+      photoBounds: cardState.photoBounds,
       material: mat, name: meta.name, code: meta.code, mark: RARITY_MARK[meta.code] || '',
       no: no, date: state.shotDate || '',
       footer1: '暗房冲印店 · ' + meta.name + '（' + meta.rarity + '）',
@@ -1769,7 +2030,11 @@
     var img = $('preview-img');
     var tip = $('preview-tip');
     if (img) img.src = state.cardUrl;
-    if (tip) tip.className = 'preview-tip';
+    $('preview-compare').disabled = !state.base || !state.cardInfo;
+    if (tip) {
+      tip.textContent = '轻点退出';
+      tip.className = 'preview-tip';
+    }
     clearTimeout(previewState.tipTimer);
     previewState.tipTimer = setTimeout(function () {
       previewState.tipTimer = 0;
@@ -1789,6 +2054,11 @@
   function closePreview(noFocus) {
     if (!previewState.open) return;
     previewState.open = false;
+    showDevelopedPreview();
+    if (previewState.original) {
+      $('preview-stage').removeChild(previewState.original);
+      previewState.original = null;
+    }
     clearTimeout(previewState.tipTimer);
     previewState.tipTimer = 0;
     var modal = $('preview-modal');
@@ -1797,6 +2067,78 @@
     var opener = previewState.opener;
     previewState.opener = null;
     if (noFocus !== true) restoreFocus(opener || $('open-preview'));
+  }
+
+  function showOriginalPreview(by) {
+    if (!previewState.open || previewState.compareBy !== null || !state.base || !state.cardInfo) return;
+    if (!previewState.original) {
+      var original;
+      try {
+        original = Film.composeCard(state.base, state.cardInfo);
+      } catch (err) {
+        var tip = $('preview-tip');
+        clearTimeout(previewState.tipTimer);
+        previewState.tipTimer = 0;
+        tip.textContent = '暂时无法查看原底片';
+        tip.className = 'preview-tip';
+        return;
+      }
+      original.className = 'preview-img';
+      original.setAttribute('role', 'img');
+      original.setAttribute('aria-label', '原底片大图');
+      $('preview-stage').appendChild(original);
+      previewState.original = original;
+    }
+    previewState.compareBy = by;
+    $('preview-img').hidden = true;
+    previewState.original.hidden = false;
+    $('preview-compare').setAttribute('aria-pressed', 'true');
+  }
+
+  function showDevelopedPreview() {
+    if (previewState.compareBy === null) return;
+    previewState.compareBy = null;
+    previewState.original.hidden = true;
+    $('preview-img').hidden = false;
+    $('preview-compare').setAttribute('aria-pressed', 'false');
+  }
+
+  function bindPreviewComparison() {
+    var button = $('preview-compare');
+    button.addEventListener('pointerdown', function (e) {
+      if (e.button === 0) showOriginalPreview(e.pointerId);
+    });
+    function releasePointer(e) {
+      if (previewState.compareBy === e.pointerId) showDevelopedPreview();
+    }
+    button.addEventListener('pointerup', releasePointer);
+    button.addEventListener('pointercancel', releasePointer);
+    button.addEventListener('pointerleave', releasePointer);
+    button.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    function compareKey(e) {
+      return e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter';
+    }
+    button.addEventListener('keydown', function (e) {
+      if (!compareKey(e)) return;
+      e.preventDefault();
+      showOriginalPreview(e.key);
+    });
+    button.addEventListener('keyup', function (e) {
+      if (!compareKey(e)) return;
+      e.preventDefault();
+      if (previewState.compareBy === e.key) showDevelopedPreview();
+    });
+    button.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (e.detail !== 0) return;
+      if (previewState.compareBy === 'activation') showDevelopedPreview();
+      else showOriginalPreview('activation');
+    });
+    button.addEventListener('blur', showDevelopedPreview);
+    window.addEventListener('blur', showDevelopedPreview);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) showDevelopedPreview();
+    });
   }
 
   function lightsOn() {
@@ -1822,7 +2164,7 @@
       leak: Math.random() < 0.3,
       dust: Math.random() < 0.5
     };
-    state.material = pickMaterial(params);
+    state.material = pickMaterial();
 
     // 等存档读回（最多 1.5 秒）再出片，编号和卡册才不会被迟到的读数覆盖
     saved.ready.then(function () { setTimeout(function () {
@@ -1832,13 +2174,15 @@
         var no = state.count + 1;
         var d = new Date();
         state.shotDate = d.getFullYear() + '.' + pad(d.getMonth() + 1, 2) + '.' + pad(d.getDate(), 2);
-        var card = Film.composeCard(photo, {
+        var cardInfo = {
           title: label.title,
           no: 'No.' + pad(no, 4),
           date: state.shotDate,
           footer: '暗房冲印店 · 暖调彩负'
-        });
+        };
+        var card = Film.composeCard(photo, cardInfo);
         state.cardUrl = card.toDataURL('image/jpeg', 0.9);
+        state.cardInfo = cardInfo;
         // 成片生成成功才提交本轮：编号、小卡照片、收集
         state.photo = photo;   // 小卡正面用这张成片（canvas），不带白边
         state.count = no;
@@ -1929,8 +2273,9 @@
     closeCard(true);
     clearFlash();
     document.body.className = '';
-    state.base = null; state.cardUrl = ''; state.tempPath = ''; state.photo = null; state.material = '';
+    state.base = null; state.cardUrl = ''; state.cardInfo = null; state.tempPath = ''; state.photo = null; state.material = '';
     state.isNewMaterial = false; state.cardShotPath = ''; state.round += 1;
+    cardState.photoBounds = null;
     $('result-img').removeAttribute('src');
     setStatus('intro-status', '再选一张照片吧。');
     show('intro');
@@ -1977,12 +2322,17 @@
     loadSaved();
     bindTrayRub();
     bindFix();
+    bindCrop();
     bindCardInteraction();
+    bindCardFraming();
     bindModalFocusTrap();
     $('pull-out').addEventListener('click', pullOut);
     $('lights-on').addEventListener('click', lightsOn);
     $('open-card').addEventListener('click', openCard);
-    $('close-card').addEventListener('click', closeCard);
+    $('close-card').addEventListener('click', function () {
+      if (cardState.framing) closeCardFraming();
+      else closeCard();
+    });
     $('save-card').addEventListener('click', saveCard);
     $('open-binder-result').addEventListener('click', openBinder);
     $('open-binder-card').addEventListener('click', openBinder);
@@ -1992,19 +2342,23 @@
     $('open-preview').addEventListener('click', openPreview);
     $('close-preview').addEventListener('click', function (e) { e.stopPropagation(); closePreview(); });
     $('preview-modal').addEventListener('click', function () { closePreview(); });
+    bindPreviewComparison();
     bindAgainConfirm();
     window.addEventListener('resize', function () {
       fitTrays();
       fitCard();
+      fitCrop();
     });
     fitTrays();
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
+        if (cropState) cropState.drag = null;
+        cardState.framingDrag = null;
         stopCardLoop();
         stopCardGyro();   // 后台不再占着陀螺仪订阅
       } else {
         state.lastTs = 0;
-        if (cardState.open && !cardState.binderOpen) { startCardLoop(); startCardGyro(); }
+        if (cardState.open && !cardState.binderOpen && !cardState.framing) { startCardLoop(); startCardGyro(); }
       }
     });
     initIntro();

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>暗房流体显影性能测试</title>
+  <style>
+    body { margin: 1rem auto; padding: 0 1rem; max-width: 34rem; font: 1rem/1.5 system-ui, sans-serif; }
+    h1 { font-size: 1.3rem; }
+    canvas { display: block; width: 100%; max-width: 20rem; height: auto; background: #21110f; touch-action: none; }
+    label, button { display: inline-block; margin: 0.75rem 0.25rem 0.75rem 0; }
+    pre { white-space: pre-wrap; }
+  </style>
+  <script defer src="./model.js"></script>
+  <script defer src="./preview.js"></script>
+</head>
+<body>
+  <h1>暗房流体显影性能测试</h1>
+  <p>在药盘上来回划动看局部显影。性能测试自动用相同路径划动，记录每帧计算和画布绘制耗时。</p>
+  <label>流场网格
+    <select id="grid">
+      <option value="24">24 × 24</option>
+      <option value="32" selected>32 × 32</option>
+      <option value="64">64 × 64</option>
+    </select>
+  </label>
+  <button id="reset" type="button">重置药盘</button>
+  <button id="benchmark" type="button">开始性能测试</button>
+  <canvas id="paper" width="256" height="256" aria-label="显影密度图"></canvas>
+  <pre id="results" aria-live="polite"></pre>
+</body>
+</html>

@@ -4,9 +4,12 @@
 
   var PORTRAIT = { w: 900, h: 1200 };
   var LANDSCAPE = { w: 1200, h: 900 };
+  var CARD_PHOTO_ASPECT = 3 / 4;
   var BUCKETS = 16;
   var DEV_MIN = 0.4;
   var DEV_MAX = 2.0;
+  var MASK_COLS = 4;
+  var MASK_ROWS = 5;
   var luts = null;
 
   function makeCanvas(w, h) {
@@ -15,6 +18,7 @@
     return c;
   }
   function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
   function rand(a, b) { return a + Math.random() * (b - a); }
 
   /* 每个显影档位一套查找表：S 曲线 + 抬高黑位 + 暖高光 / 偏冷暗部 */
@@ -23,7 +27,7 @@
     luts = [];
     for (var b = 0; b < BUCKETS; b++) {
       var dev = DEV_MIN + b * (DEV_MAX - DEV_MIN) / (BUCKETS - 1);
-      var r = new Uint8ClampedArray(256), g = new Uint8ClampedArray(256), bl = new Uint8ClampedArray(256);
+      var r = new Float32Array(256), g = new Float32Array(256), bl = new Float32Array(256);
       var gamma = Math.max(0.45, Math.min(2.2, 1 + (dev - 1) * 1.1));
       var contrast = 1 + (dev - 1) * 0.5;
       for (var v = 0; v < 256; v++) {
@@ -43,42 +47,61 @@
     return luts;
   }
 
-  function cropToCanvas(img) {
+  function cropBounds(img, aspect, zoom, centerX, centerY) {
     var sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
     if (!sw || !sh) throw new Error('empty image');
     var target = sw >= sh ? LANDSCAPE : PORTRAIT;
-    var aspect = target.w / target.h;
-    var cw = sw, ch = sw / aspect;
-    if (ch > sh) { ch = sh; cw = sh * aspect; }
-    var sx = (sw - cw) / 2, sy = (sh - ch) / 2;
-    var scale = Math.min(1, target.w / cw);
-    var out = makeCanvas(Math.round(cw * scale), Math.round(ch * scale));
+    var ratio = aspect || target.w / target.h;
+    var ch = Math.min(sh, sw / ratio) / (zoom || 1);
+    var cw = ch * ratio;
+    var x = Math.max(0, Math.min(sw - cw, sw * (centerX == null ? 0.5 : centerX) - cw / 2));
+    var y = Math.max(0, Math.min(sh - ch, sh * (centerY == null ? 0.5 : centerY) - ch / 2));
+    return { x: x, y: y, w: cw, h: ch };
+  }
+
+  function cropToCanvas(img, bounds) {
+    var crop = bounds || cropBounds(img);
+    var target = crop.w > crop.h ? LANDSCAPE : PORTRAIT;
+    var scale = Math.min(1, target.w / crop.w, target.h / crop.h);
+    var width = Math.max(1, Math.round(crop.w * scale));
+    var height = Math.max(1, Math.round(crop.h * scale));
+    // 成片按 3:4 成组取整，避免小卡因像素取整再次裁切。
+    if (bounds && Math.abs(crop.w / crop.h - CARD_PHOTO_ASPECT) < 1e-9) {
+      var units = Math.max(1, Math.round(crop.h * scale / 4));
+      width = units * 3;
+      height = units * 4;
+    }
+    var out = makeCanvas(width, height);
     var ctx = out.getContext('2d');
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(img, sx, sy, cw, ch, 0, 0, out.width, out.height);
+    ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, out.width, out.height);
     return out;
   }
 
-  function loadFile(file) {
+  function loadImage(file) {
     return new Promise(function (resolve, reject) {
       if (!file || !/^image\//.test(file.type || 'image/')) { reject(new Error('not image')); return; }
       var url = URL.createObjectURL(file);
       var img = new Image();
       var done = false;
       var timer = setTimeout(function () { finish(new Error('timeout')); }, 15000);
-      function finish(err, canvas) {
+      function finish(err) {
         if (done) return;
         done = true;
         clearTimeout(timer);
         URL.revokeObjectURL(url);
-        if (err) reject(err); else resolve(canvas);
+        if (err) reject(err); else resolve(img);
       }
       img.onload = function () {
-        try { finish(null, cropToCanvas(img)); } catch (e) { finish(e); }
+        finish(img.naturalWidth && img.naturalHeight ? null : new Error('empty image'));
       };
       img.onerror = function () { finish(new Error('decode')); };
       img.src = url;
     });
+  }
+
+  function loadFile(file) {
+    return loadImage(file).then(function (img) { return cropToCanvas(img); });
   }
 
   /* 示例底片：海边日落，现场画出来，不打包图片 */
@@ -139,46 +162,132 @@
     ctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, dw, dh);
   }
 
-  /* 显影不匀用的低频遮罩：4x5 的随机格子放大成柔和的明暗斑 */
-  function unevenMask(w, h) {
-    var small = makeCanvas(4, 5), sctx = small.getContext('2d');
-    for (var y = 0; y < 5; y++) for (var x = 0; x < 4; x++) {
-      var v = Math.round(rand(0, 255));
-      sctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
-      sctx.fillRect(x, y, 1, 1);
-    }
-    var mw = Math.ceil(w / 8), mh = Math.ceil(h / 8);
-    var m = makeCanvas(mw, mh), mctx = m.getContext('2d');
-    mctx.imageSmoothingEnabled = true;
-    mctx.drawImage(small, 0, 0, mw, mh);
-    return { w: mw, data: mctx.getImageData(0, 0, mw, mh).data };
+  function cardPhotoBounds(photo, centerX, centerY) {
+    return cropBounds(photo, CARD_PHOTO_ASPECT, 1, centerX, centerY);
+  }
+
+  function paintCardPhoto(ctx, photo, x, y, w, h, bounds) {
+    var crop = bounds || cardPhotoBounds(photo);
+    ctx.drawImage(photo, crop.x, crop.y, crop.w, crop.h, x, y, w, h);
+  }
+
+  function drawCardPhoto(photo, canvas, bounds) {
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    paintCardPhoto(ctx, photo, 0, 0, canvas.width, canvas.height, bounds);
+  }
+
+  /* 低频不匀遮罩保留 4×5 个控制点，按像素在相邻控制点之间取样。 */
+  function unevenMask() {
+    var mask = new Float32Array(MASK_COLS * MASK_ROWS);
+    for (var i = 0; i < mask.length; i++) mask[i] = Math.random();
+    return mask;
+  }
+
+  function maskPosition(pixel, size, cells) {
+    return Math.max(0, Math.min(cells - 1, (pixel + 0.5) * cells / size - 0.5));
+  }
+
+  function tonePosition(dev) {
+    return clamp01((dev - DEV_MIN) / (DEV_MAX - DEV_MIN)) * (BUCKETS - 1);
   }
 
   function applyTone(ctx, w, h, p) {
     var tables = buildLuts();
     var img = ctx.getImageData(0, 0, w, h), d = img.data;
-    var mask = p.uneven > 0.05 ? unevenMask(w, h) : null;
+    var mask = p.uneven > 0.05 ? unevenMask() : null;
+    var columns = null, maskRow = null;
+    if (mask) {
+      columns = new Float32Array(w);
+      for (var col = 0; col < w; col++) columns[col] = maskPosition(col, w, MASK_COLS);
+      maskRow = new Float32Array(MASK_COLS + 1);
+    }
     var grain = 14 + Math.max(0, p.dev - 1) * 26 + (p.dev < 0.8 ? 6 : 0);
-    var span = DEV_MAX - DEV_MIN;
-    var baseBucket = Math.round((clamp01((p.dev - DEV_MIN) / span)) * (BUCKETS - 1));
+    var baseLevel = tonePosition(p.dev);
+    var bucket = Math.floor(baseLevel);
+    var from = tables[bucket], to = tables[Math.min(bucket + 1, BUCKETS - 1)];
+    var blend = baseLevel - bucket;
     for (var y = 0, i = 0; y < h; y++) {
-      var row = mask ? (y >> 3) * mask.w : 0;
-      for (var x = 0; x < w; x++, i += 4) {
-        var t = tables[baseBucket];
-        if (mask) {
-          var mv = mask.data[(row + (x >> 3)) * 4] / 255;
-          var local = p.dev * (1 + p.uneven * 0.7 * (mv - 0.5));
-          t = tables[Math.round(clamp01((local - DEV_MIN) / span) * (BUCKETS - 1))];
+      if (mask) {
+        var maskY = maskPosition(y, h, MASK_ROWS);
+        var top = Math.floor(maskY), bottom = Math.min(top + 1, MASK_ROWS - 1);
+        for (var c = 0; c < MASK_COLS; c++) {
+          maskRow[c] = lerp(mask[top * MASK_COLS + c], mask[bottom * MASK_COLS + c], maskY - top);
         }
-        var r = t.r[d[i]], g = t.g[d[i + 1]], b = t.b[d[i + 2]];
+        maskRow[MASK_COLS] = maskRow[MASK_COLS - 1];
+      }
+      for (var x = 0; x < w; x++, i += 4) {
+        if (mask) {
+          var maskX = columns[x];
+          var left = maskX | 0;
+          var amount = lerp(maskRow[left], maskRow[left + 1], maskX - left);
+          var level = tonePosition(p.dev * (1 + p.uneven * 0.7 * (amount - 0.5)));
+          bucket = level | 0;
+          from = tables[bucket];
+          to = tables[bucket + (bucket < BUCKETS - 1 ? 1 : 0)];
+          blend = level - bucket;
+        }
+        var r = lerp(from.r[d[i]], to.r[d[i]], blend);
+        var g = lerp(from.g[d[i + 1]], to.g[d[i + 1]], blend);
+        var b = lerp(from.b[d[i + 2]], to.b[d[i + 2]], blend);
         var lum = 0.3 * r + 0.59 * g + 0.11 * b;
-        var n = (Math.random() - 0.5) * grain;
+        var brightness = lum / 255;
+        var n = (Math.random() - 0.5) * grain * 4 * brightness * (1 - brightness);
         d[i] = lum + (r - lum) * 0.86 + n;
         d[i + 1] = lum + (g - lum) * 0.86 + n;
         d[i + 2] = lum + (b - lum) * 0.86 + n;
       }
     }
     ctx.putImageData(img, 0, 0);
+  }
+
+  /* 低分辨率高光遮罩做两次一维盒式模糊，成本与遮罩像素数成正比。 */
+  function blurHighlights(src, dst, lines, length, lineStride, sampleStride, radius) {
+    var weight = 1 / (radius * 2 + 1);
+    for (var line = 0; line < lines; line++) {
+      var start = line * lineStride, sum = 0;
+      for (var s = -radius; s <= radius; s++) {
+        sum += src[start + Math.max(0, Math.min(length - 1, s)) * sampleStride];
+      }
+      for (var p = 0; p < length; p++) {
+        dst[start + p * sampleStride] = sum * weight;
+        var next = Math.min(length - 1, p + radius + 1);
+        var prev = Math.max(0, p - radius);
+        sum += src[start + next * sampleStride] - src[start + prev * sampleStride];
+      }
+    }
+  }
+
+  function applyHalation(ctx, w, h) {
+    var width = Math.ceil(w / 4), height = Math.ceil(h / 4);
+    var layer = makeCanvas(width, height), light = layer.getContext('2d');
+    light.drawImage(ctx.canvas, 0, 0, width, height);
+    var image = light.getImageData(0, 0, width, height), rgba = image.data;
+    var mask = new Float32Array(width * height), hasHighlights = false;
+    for (var i = 0, c = 0; i < mask.length; i++, c += 4) {
+      var lum = 0.3 * rgba[c] + 0.59 * rgba[c + 1] + 0.11 * rgba[c + 2];
+      mask[i] = Math.max(0, (lum - 184) / 71) * rgba[c + 3] / 255;
+      if (mask[i] > 0) hasHighlights = true;
+    }
+    if (!hasHighlights) return;
+
+    var horizontal = new Float32Array(mask.length), blurred = new Float32Array(mask.length);
+    var radius = Math.max(1, Math.round(Math.min(width, height) / 70));
+    blurHighlights(mask, horizontal, height, width, width, 1, radius);
+    blurHighlights(horizontal, blurred, width, height, 1, width, radius);
+    for (var j = 0, k = 0; j < mask.length; j++, k += 4) {
+      // 只叠加高光向周围扩散的部分，保留亮区本身的颜色。
+      var halo = Math.max(0, blurred[j] - mask[j]);
+      rgba[k] = 255;
+      rgba[k + 1] = 58 + halo * 145;
+      rgba[k + 2] = 24;
+      rgba[k + 3] = Math.min(0.22, halo * 0.75) * 255;
+    }
+    light.putImageData(image, 0, 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.drawImage(layer, 0, 0, w, h);
+    ctx.restore();
   }
 
   function vignette(ctx, w, h) {
@@ -243,6 +352,7 @@
     var out = makeCanvas(w, h), ctx = out.getContext('2d');
     ctx.drawImage(base, 0, 0);
     applyTone(ctx, w, h, p);
+    applyHalation(ctx, w, h);
     vignette(ctx, w, h);
     if (p.leak) lightLeak(ctx, w, h);
     if (p.dust) dust(ctx, w, h);
@@ -355,7 +465,7 @@
 
   function drawCardFront(ctx, photo, w, h, info) {
     var paint = CARD_PAINT[info.material] || CARD_PAINT.rainbow;
-    var r = w * 0.047, m = w * 0.036, strip = w * 0.14;
+    var r = w * 0.047, m = w * 0.036;
     ctx.save();
     roundRectPath(ctx, -w / 2, -h / 2, w, h, r);
     ctx.fillStyle = paint.stock; ctx.fill();
@@ -365,14 +475,12 @@
       ctx.fillStyle = 'rgba(255,255,255,0.12)';
       for (var ly = -h / 2; ly < h / 2; ly += 3) ctx.fillRect(-w / 2, ly, w, 1);
     }
-    // 照片窗：保持比例铺满，居中裁切
-    var px = -w / 2 + m, py = -h / 2 + m, pw = w - m * 2, ph = h - m * 2 - strip;
+    // 与页面小卡共用 3:4 照片窗和裁切区域。
+    var px = -w / 2 + m, py = -h / 2 + m, pw = w - m * 2, ph = pw * 4 / 3;
     ctx.save();
     roundRectPath(ctx, px, py, pw, ph, r * 0.3);
     ctx.clip();
-    var s = Math.max(pw / photo.width, ph / photo.height);
-    var cw = pw / s, ch = ph / s;
-    ctx.drawImage(photo, (photo.width - cw) / 2, (photo.height - ch) / 2, cw, ch, px, py, pw, ph);
+    paintCardPhoto(ctx, photo, px, py, pw, ph, info.photoBounds);
     ctx.restore();
     // 烫箔内框
     ctx.strokeStyle = paint.trim; ctx.globalAlpha = 0.85; ctx.lineWidth = 2;
@@ -409,7 +517,7 @@
     ctx.fillStyle = glare; ctx.fillRect(-w / 2, -h / 2, w, h);
     ctx.globalCompositeOperation = 'source-over';
     // 底部印刷栏
-    var by = h / 2 - strip / 2 - m * 0.2;
+    var by = (py + ph + h / 2) / 2 - 5;
     ctx.textAlign = 'left';
     ctx.fillStyle = paint.sub; ctx.font = '13px ' + MONO;
     ctx.fillText('DARKROOM LAB · 35MM', -w / 2 + m, by - 8);
@@ -470,9 +578,15 @@
 
   window.Film = {
     loadFile: loadFile,
+    loadImage: loadImage,
+    cropBounds: cropBounds,
+    cropToCanvas: cropToCanvas,
     makeSample: makeSample,
     drawFit: drawFit,
     drawCover: drawCover,
+    cardPhotoAspect: CARD_PHOTO_ASPECT,
+    cardPhotoBounds: cardPhotoBounds,
+    drawCardPhoto: drawCardPhoto,
     develop: develop,
     composeCard: composeCard,
     composePhotocard: composePhotocard
