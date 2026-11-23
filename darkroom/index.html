@@ -63,36 +63,68 @@
     </section>
 
     <section class="screen screen-crop" id="screen-crop" hidden>
-      <header class="topbar">
-        <h2 class="crop-title" id="crop-title" tabindex="-1">裁剪照片</h2>
-        <p class="hint" id="crop-hint">拖动裁剪框，选好要冲印的范围</p>
+      <header class="crop-bar">
+        <button class="card-bar-btn" id="crop-cancel" type="button" aria-label="返回重选照片">
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+            <path d="M12.5 4.5L7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>返回</span>
+        </button>
+        <span class="crop-format-badge" id="crop-format-badge" aria-live="polite">ORIGINAL</span>
+        <h2 class="visually-hidden" id="crop-title" tabindex="-1">裁剪照片</h2>
       </header>
       <div class="crop-stage" id="crop-stage">
         <div class="crop-frame" id="crop-frame" tabindex="0" role="group" aria-label="裁剪框，可用方向键移动">
-          <div class="crop-box" id="crop-box" aria-hidden="true"></div>
+          <div class="crop-box" id="crop-box" aria-hidden="true">
+            <span class="crop-corner cc-tl"></span>
+            <span class="crop-corner cc-tr"></span>
+            <span class="crop-corner cc-bl"></span>
+            <span class="crop-corner cc-br"></span>
+            <span class="crop-grid">
+              <span class="cg-v1"></span>
+              <span class="cg-v2"></span>
+              <span class="cg-h1"></span>
+              <span class="cg-h2"></span>
+              <span class="cg-center"></span>
+            </span>
+          </div>
         </div>
       </div>
       <div class="crop-controls">
+        <p class="crop-hint" id="crop-hint">拖动裁剪框，选好要冲印的范围</p>
         <div class="crop-ratios" id="crop-ratios" role="group" aria-label="裁剪比例">
           <div class="crop-ratio-presets">
-            <button class="card-bar-btn" type="button" data-ratio="original" aria-pressed="true">原图</button>
-            <button class="card-bar-btn" type="button" data-ratio="3:2" aria-pressed="false">
-              <span>35mm 全格 <span class="crop-ratio-number">3:2</span></span>
+            <button class="crop-ratio-btn" type="button" data-ratio="original" aria-pressed="true">
+              <span class="crop-ico crop-ico-orig" aria-hidden="true"></span>
+              <span class="crop-ratio-txt">原图</span>
             </button>
-            <button class="card-bar-btn" type="button" data-ratio="4:3" aria-pressed="false">
-              <span>35mm 半格 <span class="crop-ratio-number">4:3</span><span class="crop-ratio-match" id="crop-half-card-match" hidden>小卡同框</span></span>
+            <button class="crop-ratio-btn" type="button" data-ratio="3:2" aria-pressed="false">
+              <span class="crop-ico crop-ico-32" aria-hidden="true"></span>
+              <span class="crop-ratio-txt">全格 <span class="crop-ratio-number">3:2</span></span>
             </button>
-            <button class="card-bar-btn" type="button" data-ratio="1:1" aria-pressed="false">
-              <span>120 方幅 <span class="crop-ratio-number">1:1</span></span>
+            <button class="crop-ratio-btn" type="button" data-ratio="4:3" aria-pressed="false">
+              <span class="crop-ico crop-ico-43" aria-hidden="true"></span>
+              <span class="crop-ratio-txt">半格 <span class="crop-ratio-number">4:3</span></span>
+              <span class="crop-ratio-match" id="crop-half-card-match" hidden>小卡同框</span>
+            </button>
+            <button class="crop-ratio-btn" type="button" data-ratio="1:1" aria-pressed="false">
+              <span class="crop-ico crop-ico-11" aria-hidden="true"></span>
+              <span class="crop-ratio-txt">方幅 <span class="crop-ratio-number">1:1</span></span>
+            </button>
+            <button class="crop-ratio-btn crop-card-ratio" id="crop-card-ratio" type="button" data-ratio="card" aria-pressed="false" hidden>
+              <span class="crop-ico crop-ico-card" aria-hidden="true"></span>
+              <span class="crop-ratio-txt">小卡同框</span>
+              <span class="crop-ratio-detail">3:4 竖幅</span>
             </button>
           </div>
-          <button class="card-bar-btn crop-card-ratio" id="crop-card-ratio" type="button" data-ratio="card" aria-pressed="false" hidden>
-            小卡同框 · 3:4 竖幅
-          </button>
         </div>
-        <label class="crop-zoom">放大 <input id="crop-zoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+        <div class="crop-zoom">
+          <span class="crop-zoom-val" id="crop-zoom-val" aria-hidden="true">1.0×</span>
+          <div class="crop-scrubber">
+            <input id="crop-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="放大倍数" />
+          </div>
+        </div>
         <div class="crop-actions">
-          <button class="btn btn-ghost" id="crop-cancel" type="button">返回</button>
           <button class="btn btn-primary" id="crop-apply" type="button">用这张底片</button>
         </div>
         <p class="status" id="crop-status" role="status"></p>
@@ -256,10 +288,25 @@
       <div class="card-stage" id="card-stage">
         <div class="card-stage-inner" id="card-stage-inner">
           <div class="holo-scene" id="holo-scene">
+            <div class="holo-shadow" id="holo-shadow" aria-hidden="true"></div>
             <div class="holo-aura" id="holo-aura" aria-hidden="true"></div>
             <div class="holo-tilt" id="holo-tilt">
               <div class="holo-flipper is-flipped" id="holo-card" tabindex="0" role="button" aria-label="暗房镭射小卡，轻点翻开或翻转，拖动倾斜赏光">
-                <!-- 正面：厚卡纸底板 + 差异化烫箔包边 + 内嵌照片窗 + 收藏卡微缩印刷 -->
+                <!-- 10px 实体厚卡切边（仅在翻面经过侧面时显示，静止零合成开销） -->
+                <div class="holo-edges" id="holo-edges" aria-hidden="true">
+                  <span class="holo-edge-slice es-1"></span>
+                  <span class="holo-edge-slice es-2"></span>
+                  <span class="holo-edge-slice es-3"></span>
+                  <span class="holo-edge-slice es-4"></span>
+                  <span class="holo-edge-slice es-5"></span>
+                  <span class="holo-edge-slice es-6"></span>
+                  <span class="holo-edge-slice es-7"></span>
+                  <span class="holo-edge-slice es-8"></span>
+                  <span class="holo-edge-slice es-9"></span>
+                  <span class="holo-edge-slice es-10"></span>
+                </div>
+
+                <!-- 正面：厚卡纸底板、烫箔包边、照片窗和动态反光 -->
                 <div class="holo-face holo-front" id="holo-front" data-material="rainbow">
                   <div class="holo-trim" aria-hidden="true">
                     <span class="trim-corner trim-tl"></span>
@@ -284,15 +331,18 @@
                   </div>
                   <div class="holo-fx" id="holo-fx" aria-hidden="true">
                     <div class="holo-foil"></div>
-                    <div class="holo-glare"></div>
+                    <div class="holo-glare" id="holo-glare"></div>
+                    <div class="holo-rim" id="holo-rim"></div>
                     <div class="holo-edge"></div>
                   </div>
                 </div>
 
-                <!-- 背面：全系列统一暗房图腾 × 实体相纸背印（不剧透材质与稀有度） -->
+                <!-- 背面：全系列统一暗房图腾 × 多层光圈视差景深（不剧透材质与稀有度） -->
                 <div class="holo-face holo-back" id="holo-back">
-                  <div class="holo-back-watermark" aria-hidden="true"></div>
+                  <div class="holo-back-watermark" id="holo-back-watermark" aria-hidden="true"></div>
                   <div class="holo-back-shine" id="holo-back-shine" aria-hidden="true"></div>
+                  <div class="holo-back-glare" id="holo-back-glare" aria-hidden="true"></div>
+                  <div class="holo-back-rim" id="holo-back-rim" aria-hidden="true"></div>
                   <div class="holo-back-outer-frame" aria-hidden="true"></div>
                   <div class="holo-back-inner-frame" aria-hidden="true">
                     <span class="reg-mark reg-tl"></span>
@@ -305,19 +355,25 @@
                     <div class="holo-back-emblem" aria-hidden="true">
                       <span class="emblem-en">DARKROOM LAB</span>
                       <svg class="emblem-svg" viewBox="0 0 120 120" width="96" height="96">
-                        <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.45"/>
-                        <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2 3.5" opacity="0.5"/>
-                        <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" stroke-width="1" opacity="0.68"/>
-                        <g stroke="currentColor" stroke-width="0.9" opacity="0.62" fill="none">
+                        <g id="emblem-outer">
+                          <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.45"/>
+                          <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" stroke-width="1" opacity="0.68"/>
+                        </g>
+                        <g id="emblem-dash">
+                          <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-width="0.75" stroke-dasharray="2 3.5" opacity="0.54"/>
+                        </g>
+                        <g id="emblem-blades" stroke="currentColor" stroke-width="0.9" opacity="0.62" fill="none">
                           <line x1="60" y1="26" x2="82" y2="54"/>
                           <line x1="89.4" y1="43" x2="71" y2="75"/>
                           <line x1="89.4" y1="77" x2="54" y2="82"/>
                           <line x1="60" y1="94" x2="38" y2="66"/>
                           <line x1="30.6" y1="77" x2="49" y2="45"/>
                           <line x1="30.6" y1="43" x2="66" y2="38"/>
+                          <circle cx="60" cy="60" r="11" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.65"/>
                         </g>
-                        <circle cx="60" cy="60" r="11" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.65"/>
-                        <circle cx="60" cy="60" r="3.6" fill="#d84534"/>
+                        <g id="emblem-core">
+                          <circle cx="60" cy="60" r="3.6" fill="#d84534"/>
+                        </g>
                       </svg>
                       <span class="emblem-cn">暗房冲印店</span>
                     </div>
@@ -339,7 +395,7 @@
           <p class="card-tip" id="card-tip">点击翻开</p>
         </div>
         <section class="card-framing" id="card-framing" aria-label="小卡照片构图" hidden>
-          <canvas id="card-framing-canvas" width="360" height="320" tabindex="0" role="group" aria-label="小卡取景，可用方向键移动照片"></canvas>
+          <canvas id="card-framing-canvas" width="360" height="350" tabindex="0" role="group" aria-label="小卡取景，可用方向键移动照片"></canvas>
           <p class="card-tip">拖动照片，把主体留在框里</p>
         </section>
       </div>
@@ -379,12 +435,21 @@
             <path d="M5.5 5.5l9 9m0-9l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           </svg>
         </button>
-        <button type="button" class="card-bar-btn preview-compare" id="preview-compare" aria-pressed="false">按住看原底片</button>
+        <span class="preview-raw-badge" id="preview-raw-badge" aria-hidden="true">RAW · 原底片</span>
       </div>
       <div class="preview-stage" id="preview-stage">
         <img class="preview-img" id="preview-img" alt="冲洗出来的照片大图" />
       </div>
-      <p class="preview-tip" id="preview-tip" aria-hidden="true">轻点退出</p>
+      <div class="preview-footer">
+        <button type="button" class="card-bar-btn preview-compare" id="preview-compare" aria-pressed="false">
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+            <rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="10" y1="4" x2="10" y2="16" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <span>按住看原底片</span>
+        </button>
+        <p class="preview-tip" id="preview-tip" aria-hidden="true">轻点退出</p>
+      </div>
     </div>
   </div>
 

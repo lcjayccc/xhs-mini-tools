@@ -46,9 +46,11 @@
     revealedRound: -1, shimmerRound: -1, cardOpener: null, binderOpener: null,
     raf: 0, lastTs: 0,
     rx: 0, ry: 0, vx: 0, vy: 0,
-    tx: 0, ty: 0, dragging: false, lastInputTs: 0,
+    lx: 34, ly: 22, vlx: 0, vly: 0, on: 0,
+    turn: 180, vTurn: 0, charge: 0, dashAngle: 0,
+    tx: 0, ty: 0, dragging: false, hovering: false, lastInputTs: 0,
     sweepStart: 0, sweeping: false,
-    slowFrames: 0, lowPerf: false,
+    slowFrames: 0, lowPerf: false, lastDraw: '',
     thumb: null
   };
 
@@ -618,37 +620,72 @@
     frame.style.height = Math.max(1, image.naturalHeight * size) + 'px';
   }
 
+  function setCropGridVisible(active, holdMs) {
+    if (!cropState) return;
+    var frame = $('crop-frame');
+    clearTimeout(cropState.gridTimer);
+    cropState.gridTimer = 0;
+    if (active) {
+      if (frame.className !== 'crop-frame is-interacting') frame.className = 'crop-frame is-interacting';
+      if (holdMs) {
+        cropState.gridTimer = setTimeout(function () {
+          if (cropState) cropState.gridTimer = 0;
+          if (!cropState || !cropState.drag) frame.className = 'crop-frame';
+        }, holdMs);
+      }
+    } else {
+      cropState.gridTimer = setTimeout(function () {
+        if (cropState) cropState.gridTimer = 0;
+        if (!cropState || !cropState.drag) frame.className = 'crop-frame';
+      }, holdMs || 220);
+    }
+  }
+
   function selectCropRatio(format) {
     var image = cropState.image;
     var horizontal = image.naturalWidth >= image.naturalHeight;
+    var badgeText = 'ORIGINAL';
     if (format === 'original') {
       cropState.ratio = image.naturalWidth / image.naturalHeight;
+      badgeText = '原图';
     } else if (format === 'card') {
       cropState.ratio = Film.cardPhotoAspect;
+      badgeText = '小卡同框 · 3:4';
     } else {
       var sides = format.split(':');
       var ratio = Number(sides[0]) / Number(sides[1]);
       cropState.ratio = horizontal ? ratio : 1 / ratio;
+      var ratioStr = horizontal ? format : sides.slice().reverse().join(':');
+      if (format === '3:2') badgeText = '35mm 全格 · ' + ratioStr;
+      else if (format === '4:3') badgeText = '35mm 半格 · ' + ratioStr;
+      else badgeText = '120 方幅 · 1:1';
     }
-    var buttons = $('crop-ratios').querySelectorAll('button');
+    var ratiosEl = $('crop-ratios');
+    ratiosEl.className = horizontal ? 'crop-ratios' : 'crop-ratios is-portrait';
+    var buttons = ratiosEl.querySelectorAll('button');
     for (var i = 0; i < buttons.length; i++) {
       var value = buttons[i].getAttribute('data-ratio');
       var label = buttons[i].querySelector('.crop-ratio-number');
       if (label) label.textContent = horizontal ? value : value.split(':').reverse().join(':');
       buttons[i].setAttribute('aria-pressed', String(value === format));
     }
+    var badge = $('crop-format-badge');
+    if (badge) badge.textContent = badgeText;
     $('crop-hint').textContent = cropState.ratio === Film.cardPhotoAspect
-      ? '拖动裁剪框，成片与小卡共用这一块画面' : '拖动裁剪框，选好要冲印的范围';
+      ? '成片与小卡共用同一取景' : '拖动取景框，拨动下方刻度缩放';
     paintCrop();
   }
 
   function startCrop(image) {
-    cropState = { image: image, zoom: 1, x: 0.5, y: 0.5, drag: null };
+    cropState = { image: image, zoom: 1, x: 0.5, y: 0.5, drag: null, gridTimer: 0 };
     image.className = 'crop-source';
     image.draggable = false;
     image.alt = '';
+    $('crop-frame').className = 'crop-frame';
     $('crop-frame').appendChild(image);
     $('crop-zoom').value = '1';
+    var zoomVal = $('crop-zoom-val');
+    if (zoomVal) zoomVal.textContent = '1.0×';
     var horizontal = image.naturalWidth >= image.naturalHeight;
     $('crop-card-ratio').hidden = !horizontal;
     $('crop-half-card-match').hidden = horizontal;
@@ -661,6 +698,8 @@
   }
 
   function clearCrop() {
+    clearTimeout(cropState.gridTimer);
+    $('crop-frame').className = 'crop-frame';
     $('crop-frame').removeChild(cropState.image);
     cropState = null;
   }
@@ -675,11 +714,15 @@
     }
     $('crop-zoom').addEventListener('input', function (e) {
       cropState.zoom = Number(e.target.value);
+      var zoomVal = $('crop-zoom-val');
+      if (zoomVal) zoomVal.textContent = cropState.zoom.toFixed(1) + '×';
+      setCropGridVisible(true, 360);
       paintCrop();
     });
     frame.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || cropState.drag) return;
       cropState.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      setCropGridVisible(true);
       if (frame.setPointerCapture) { try { frame.setPointerCapture(e.pointerId); } catch (err) { /* 指针已释放 */ } }
     });
     frame.addEventListener('pointermove', function (e) {
@@ -693,7 +736,10 @@
       paintCrop();
     });
     function release(e) {
-      if (cropState && cropState.drag && cropState.drag.id === e.pointerId) cropState.drag = null;
+      if (cropState && cropState.drag && cropState.drag.id === e.pointerId) {
+        cropState.drag = null;
+        setCropGridVisible(false, 220);
+      }
     }
     frame.addEventListener('pointerup', release);
     frame.addEventListener('pointercancel', release);
@@ -706,6 +752,7 @@
       e.preventDefault();
       cropState.x += direction[0] * 0.02;
       cropState.y += direction[1] * 0.02;
+      setCropGridVisible(true, 450);
       paintCrop();
     });
     $('crop-cancel').addEventListener('click', function () {
@@ -1261,33 +1308,156 @@
     return svg + '<span>' + meta.code + '</span>';
   }
 
+  function setTransform(el, val) {
+    if (!el) return;
+    el.style.webkitTransform = val;
+    el.style.transform = val;
+  }
+
   function applyCardVisual(rx, ry) {
     var tilt = $('holo-tilt');
+    var card = $('holo-card');
+    var shadow = $('holo-shadow');
+    var edges = $('holo-edges');
     var fx = $('holo-fx');
+    var glare = $('holo-glare');
+    var rim = $('holo-rim');
+    var back = $('holo-back');
     var backShine = $('holo-back-shine');
-    if (tilt) {
-      var t = 'rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)';
-      tilt.style.webkitTransform = t;
-      tilt.style.transform = t;
+    var backGlare = $('holo-back-glare');
+    var backRim = $('holo-back-rim');
+    var reduced = isReducedMotion();
+
+    if (reduced) {
+      cardState.lastDraw = '';
+      setTransform(tilt, '');
+      setTransform(card, '');
+      setTransform(shadow, '');
+      setTransform($('card-photo'), '');
+      setTransform($('holo-back-watermark'), '');
+      if (edges && edges.className !== 'holo-edges') edges.className = 'holo-edges';
+      return;
     }
+
+    var turn = cardState.turn;
+    var charge = cardState.charge;
+    var lx = cardState.lx;
+    var ly = cardState.ly;
+    var on = cardState.on;
+    var dash = cardState.dashAngle;
+    var drawKey = rx.toFixed(2) + ',' + ry.toFixed(2) + ',' + turn.toFixed(2) + ',' +
+      charge.toFixed(3) + ',' + lx.toFixed(1) + ',' + ly.toFixed(1) + ',' +
+      on.toFixed(2) + ',' + dash.toFixed(1) + ',' + (cardState.revealed ? 1 : 0) + ',' +
+      (cardState.lowPerf ? 1 : 0);
+    if (drawKey === cardState.lastDraw) return;
+    cardState.lastDraw = drawKey;
+
+    var rad = Math.PI / 180;
+    var turnRad = turn * rad;
+    var liftFrac = Math.abs(Math.sin(turnRad));
+    var showingFront = Math.cos(turnRad) >= 0;
+
+    // 1. 倾斜 + 翻面弹簧 + 抬升 + 揭晓蓄力
+    setTransform(tilt, 'rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)');
+    var tz = liftFrac * 40 + charge * 18;
+    var flipTf = 'translateZ(' + tz.toFixed(2) + 'px) rotateY(' + turn.toFixed(2) + 'deg)';
+    if (charge > 0.002) flipTf += ' scale(' + (1 - charge * 0.03).toFixed(4) + ')';
+    setTransform(card, flipTf);
+
+    // 2. 地面落影（向抬起反方向漂移，侧转时收窄并下沉）
+    if (shadow && !cardState.lowPerf) {
+      var shx = (-ry * 1.8).toFixed(1);
+      var shy = (rx * 1.2 + liftFrac * 14).toFixed(1);
+      var shScale = (1 - liftFrac * 0.45).toFixed(3);
+      setTransform(shadow, 'translate3d(' + shx + 'px,' + shy + 'px,0) scaleX(' + shScale + ')');
+    }
+
+    // 3. 10px 切边切片（仅在翻转经过侧面且非低端机时显现，揭晓前保持暗房中性色）
+    if (edges) {
+      var showEdges = !cardState.lowPerf && liftFrac > 0.04;
+      var edgeCls = 'holo-edges' + (showEdges ? ' is-showing' : '') + (cardState.revealed ? ' is-revealed' : '');
+      if (edges.className !== edgeCls) edges.className = edgeCls;
+    }
+
     if (cardState.lowPerf) return;
+
     var nx = clamp11(ry / 12);
     var ny = clamp11(-rx / 12);
-    var px = (50 + nx * 38).toFixed(1) + '%';
-    var py = (50 + ny * 38).toFixed(1) + '%';
-    var bgx = (50 + nx * 46).toFixed(1) + '%';
-    var bgy = (50 + ny * 46).toFixed(1) + '%';
-    var hyp = Math.min(1, Math.sqrt(nx * nx + ny * ny)).toFixed(3);
-    if (fx) {
-      fx.style.setProperty('--px', px);
-      fx.style.setProperty('--py', py);
-      fx.style.setProperty('--bgx', bgx);
-      fx.style.setProperty('--bgy', bgy);
-      fx.style.setProperty('--hyp', hyp);
-    }
-    if (backShine) {
-      backShine.style.setProperty('--px', (50 - nx * 38).toFixed(1) + '%');
-      backShine.style.setProperty('--py', py);
+    var hyp = Math.min(1, Math.sqrt(nx * nx + ny * ny));
+    var sinX = Math.sin(rx * rad);
+
+    // 4. 仅更新当前可见面的光照、反光、动态边光与多层景深视差
+    if (showingFront) {
+      var px = lx.toFixed(1) + '%';
+      var py = ly.toFixed(1) + '%';
+      var bgx = (50 + (lx - 50) * 0.92).toFixed(1) + '%';
+      var bgy = (50 + (ly - 50) * 0.92).toFixed(1) + '%';
+      if (fx) {
+        fx.style.setProperty('--px', px);
+        fx.style.setProperty('--py', py);
+        fx.style.setProperty('--bgx', bgx);
+        fx.style.setProperty('--bgy', bgy);
+        fx.style.setProperty('--hyp', Math.min(1, Math.max(hyp, on * 0.72)).toFixed(3));
+      }
+      if (glare) {
+        var gx = ((lx - 50) * 0.5).toFixed(2);
+        var gy = ((ly - 50) * 0.5).toFixed(2);
+        setTransform(glare, 'translate3d(' + gx + '%,' + gy + '%,0)');
+        var mat = state.material || 'rainbow';
+        var gOp = mat === 'prism' ? (0.25 + on * 0.45) :
+          (mat === 'pearl' ? (0.48 + on * 0.48) :
+          (mat === 'etched' ? (0.20 + on * 0.40) : (0.35 + on * 0.65)));
+        glare.style.opacity = gOp.toFixed(3);
+      }
+      if (rim) {
+        rim.style.opacity = (0.60 + on * 0.40).toFixed(3);
+      }
+      // 照片窗随倾斜产生视差，预放大以覆盖移动时的边缘。
+      var sinYf = Math.sin((ry + turn) * rad);
+      setTransform($('card-photo'),
+        'translate3d(' + (-22 * sinYf).toFixed(2) + 'px,' + (22 * sinX).toFixed(2) + 'px,0) scale(1.09)');
+    } else {
+      var blx = 100 - lx;
+      var bpx = blx.toFixed(1) + '%';
+      var bpy = ly.toFixed(1) + '%';
+      if (back) {
+        back.style.setProperty('--px', bpx);
+        back.style.setProperty('--py', bpy);
+      }
+      if (backShine) {
+        backShine.style.setProperty('--px', bpx);
+        backShine.style.setProperty('--py', bpy);
+      }
+      if (backGlare) {
+        var bgx2 = ((blx - 50) * 0.5).toFixed(2);
+        var bgy2 = ((ly - 50) * 0.5).toFixed(2);
+        setTransform(backGlare, 'translate3d(' + bgx2 + '%,' + bgy2 + '%,0)');
+        backGlare.style.opacity = (0.32 + on * 0.48).toFixed(3);
+      }
+      if (backRim) {
+        backRim.style.opacity = (0.60 + on * 0.40).toFixed(3);
+      }
+      // 背面多层景深视差：水印 +32、外环 +22、虚线环 +14（逆转）、叶片 +8、红点 -6
+      var sinYb = Math.sin((ry + turn - 180) * rad);
+      setTransform($('holo-back-watermark'),
+        'translate3d(' + (-32 * sinYb).toFixed(2) + 'px,' + (32 * sinX).toFixed(2) + 'px,0)');
+      var svgScale = 1.25;
+      var elOuter = $('emblem-outer');
+      var elDash = $('emblem-dash');
+      var elBlades = $('emblem-blades');
+      var elCore = $('emblem-core');
+      if (elOuter) {
+        elOuter.setAttribute('transform', 'translate(' + (-22 * sinYb * svgScale).toFixed(2) + ',' + (22 * sinX * svgScale).toFixed(2) + ')');
+      }
+      if (elDash) {
+        elDash.setAttribute('transform', 'translate(' + (-14 * sinYb * svgScale).toFixed(2) + ',' + (14 * sinX * svgScale).toFixed(2) + ') rotate(' + dash.toFixed(1) + ',60,60)');
+      }
+      if (elBlades) {
+        elBlades.setAttribute('transform', 'translate(' + (-8 * sinYb * svgScale).toFixed(2) + ',' + (8 * sinX * svgScale).toFixed(2) + ')');
+      }
+      if (elCore) {
+        elCore.setAttribute('transform', 'translate(' + (6 * sinYb * svgScale).toFixed(2) + ',' + (-6 * sinX * svgScale).toFixed(2) + ')');
+      }
     }
   }
 
@@ -1295,6 +1465,7 @@
     if (!cardState.open || cardState.binderOpen) return;
     if (isReducedMotion()) {
       cardState.rx = 0; cardState.ry = 0; cardState.vx = 0; cardState.vy = 0;
+      cardState.turn = cardState.flipped ? 180 : 0; cardState.vTurn = 0; cardState.charge = 0;
       applyCardVisual(0, 0);
       cardState.raf = 0;
       return;
@@ -1315,38 +1486,72 @@
 
     var now = Date.now();
     var targetRx = 0, targetRy = 0;
-    var hasActiveInput = cardState.dragging || (now - cardState.lastInputTs < 420);
+    var targetLx = 34, targetLy = 22, onTarget = 0;
+    var hasActiveInput = cardState.dragging || (now - cardState.lastInputTs < 420) ||
+      (cardState.hovering && !cardState.sweeping);
+
     if (hasActiveInput) {
       cardState.sweeping = false;
       targetRy = cardState.tx * 12;
       targetRx = -cardState.ty * 12;
+      targetLx = (cardState.tx + 1) * 50;
+      targetLy = (cardState.ty + 1) * 50;
+      onTarget = 1;
     } else if (cardState.sweeping) {
       var p = (now - cardState.sweepStart) / 760;
       if (p >= 1) {
         cardState.sweeping = false;
-      } else {
+      } else if (p >= 0) {
         var env = Math.sin(p * Math.PI);
         var sweepX = -Math.cos(p * Math.PI) * 0.72 * env;
         var sweepY = -Math.cos(p * Math.PI) * 0.48 * env;
         targetRy = sweepX * 12;
         targetRx = -sweepY * 12;
+        targetLx = (sweepX + 1) * 50;
+        targetLy = (sweepY + 1) * 50;
+        onTarget = env;
       }
     } else {
+      // Standard 双频手持呼吸微晃，光点随之在左上方自然游动
       var t = ts / 1000;
-      var idleAmp = cardState.revealed ? 1 : 0.6;
-      targetRy = Math.sin(t * 1.15) * 3.8 * idleAmp;
-      targetRx = Math.cos(t * 0.85) * 2.8 * idleAmp;
+      targetRx = 2.2 * Math.sin(0.9 * t + 0.6) + 0.8 * Math.sin(2.3 * t);
+      targetRy = 3.2 * Math.sin(0.7 * t) + 0.9 * Math.sin(1.9 * t + 1.2);
+      targetLx = clamp01((34 + cardState.ry * 3) / 100) * 100;
+      targetLy = clamp01((22 - cardState.rx * 3) / 100) * 100;
     }
 
-    // 弹簧回弹物理
-    var stiffness = cardState.dragging ? 170 : 95;
-    var damping = cardState.dragging ? 18 : 11;
-    var ax = (targetRx - cardState.rx) * stiffness - cardState.vx * damping;
-    var ay = (targetRy - cardState.ry) * stiffness - cardState.vy * damping;
-    cardState.vx += ax * dt;
-    cardState.vy += ay * dt;
-    cardState.rx += cardState.vx * dt;
-    cardState.ry += cardState.vy * dt;
+    // 2 步子积分保证低帧率下 140/160 弹簧绝对稳定
+    var steps = dt > 0.022 ? 2 : 1;
+    var subDt = dt / steps;
+    var targetTurn = cardState.flipped ? 180 : 0;
+    var chargeTarget = cardState.revealing ? 1 : 0;
+    for (var s = 0; s < steps; s += 1) {
+      // 倾斜弹簧（140 / 15，带微弱回弹）
+      var ax = (targetRx - cardState.rx) * 140 - cardState.vx * 15;
+      var ay = (targetRy - cardState.ry) * 140 - cardState.vy * 15;
+      cardState.vx += ax * subDt;
+      cardState.vy += ay * subDt;
+      cardState.rx += cardState.vx * subDt;
+      cardState.ry += cardState.vy * subDt;
+
+      // 光点弹簧（160 / 25.3，临界阻尼无过冲）
+      var alx = (targetLx - cardState.lx) * 160 - cardState.vlx * 25.3;
+      var aly = (targetLy - cardState.ly) * 160 - cardState.vly * 25.3;
+      cardState.vlx += alx * subDt;
+      cardState.vly += aly * subDt;
+      cardState.lx += cardState.vlx * subDt;
+      cardState.ly += cardState.vly * subDt;
+
+      // 翻面弹簧（70 / 11，约 0.8s 带微弱过冲回稳）
+      var aTurn = (targetTurn - cardState.turn) * 70 - cardState.vTurn * 11;
+      cardState.vTurn += aTurn * subDt;
+      cardState.turn += cardState.vTurn * subDt;
+    }
+
+    cardState.on += (onTarget - cardState.on) * (1 - Math.exp(-7 * dt));
+    cardState.charge += (chargeTarget - cardState.charge) * (1 - Math.exp(-10 * dt));
+    if (!cardState.revealing && cardState.charge < 0.002) cardState.charge = 0;
+    if (!cardState.lowPerf) cardState.dashAngle = (cardState.dashAngle - dt * 8) % 360;
 
     applyCardVisual(cardState.rx, cardState.ry);
     cardState.raf = requestAnimationFrame(cardTick);
@@ -1628,6 +1833,8 @@
     var noPad = pad(state.shotNo || state.count, 4);
 
     $('holo-front').setAttribute('data-material', mat);
+    var edgesEl = $('holo-edges');
+    if (edgesEl) edgesEl.setAttribute('data-material', mat);
     $('card-front-no').textContent = 'NO.' + noPad;
     $('card-front-mat').textContent = meta.name;
     $('card-front-rarity').innerHTML = buildRarityMarkup(meta);
@@ -1653,6 +1860,9 @@
     cardState.revealed = true;
     cardState.revealing = false;
     cardState.flipped = false;
+    if (instant) {
+      cardState.turn = 0; cardState.vTurn = 0; cardState.charge = 0;
+    }
 
     var scene = $('holo-scene');
     if (scene && !instant) scene.className = 'holo-scene';
@@ -1690,8 +1900,10 @@
     cardState.open = true;
     cardState.sweeping = false;
     cardState.rx = 0; cardState.ry = 0; cardState.vx = 0; cardState.vy = 0;
-    cardState.tx = 0; cardState.ty = 0; cardState.dragging = false; cardState.lastInputTs = 0;
-    cardState.slowFrames = 0;
+    cardState.lx = 34; cardState.ly = 22; cardState.vlx = 0; cardState.vly = 0; cardState.on = 0;
+    cardState.turn = showFront ? 0 : 180; cardState.vTurn = 0; cardState.charge = 0;
+    cardState.tx = 0; cardState.ty = 0; cardState.dragging = false; cardState.hovering = false; cardState.lastInputTs = 0;
+    cardState.slowFrames = 0; cardState.lastDraw = '';
 
     var card = $('holo-card');
     if (showFront) {
@@ -1741,6 +1953,7 @@
     cardState.open = false;
     cardState.revealing = false;
     cardState.dragging = false;
+    cardState.hovering = false;
     cardState.sweeping = false;
     stopCardLoop();
     stopCardGyro();
@@ -1759,23 +1972,93 @@
     $('card-tip').textContent = tip;
   }
 
+  function drawRoundedRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   function renderCardFraming() {
     var canvas = $('card-framing-canvas'), ctx = canvas.getContext('2d');
     var crop = cardState.framingBounds, photo = state.photo;
     var w = canvas.width, h = canvas.height;
     var frameWidth = w / 2, frameHeight = frameWidth * crop.h / crop.w;
-    var left = (w - frameWidth) / 2, top = (h - frameHeight) / 2;
+    var left = (w - frameWidth) / 2;
+    var pad = 10;
+    var cardW = frameWidth + pad * 2;
+    var cardH = Math.round(cardW * 85 / 55);
+    var cardY = Math.round((h - cardH) / 2);
+    var top = cardY + pad;
     var scale = frameWidth / crop.w;
+
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(photo, left - crop.x * scale, top - crop.y * scale,
       photo.width * scale, photo.height * scale);
-    ctx.fillStyle = 'rgba(16, 7, 7, 0.68)';
+
+    // 窗外压暗遮罩
+    ctx.fillStyle = 'rgba(10, 6, 6, 0.76)';
     ctx.fillRect(0, 0, w, top);
-    ctx.fillRect(0, top + frameHeight, w, top);
+    ctx.fillRect(0, top + frameHeight, w, h - (top + frameHeight));
     ctx.fillRect(0, top, left, frameHeight);
-    ctx.fillRect(left + frameWidth, top, left, frameHeight);
-    ctx.strokeStyle = '#f3d7c1';
-    ctx.strokeRect(left, top, frameWidth, frameHeight);
+    ctx.fillRect(left + frameWidth, top, w - (left + frameWidth), frameHeight);
+
+    // 55:85 实体小卡中性卡套轮廓（不剧透材质与稀有度）
+    var cardX = left - pad;
+    ctx.save();
+    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 10);
+    ctx.strokeStyle = 'rgba(245, 232, 224, 0.24)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 底部信息条中性占位示意
+    var metaLineY = top + frameHeight + 8;
+    ctx.beginPath();
+    ctx.moveTo(left + 2, metaLineY);
+    ctx.lineTo(left + frameWidth - 2, metaLineY);
+    ctx.strokeStyle = 'rgba(245, 232, 224, 0.14)';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(245, 232, 224, 0.20)';
+    ctx.fillRect(left + 4, metaLineY + 12, 42, 4);
+    ctx.fillRect(left + 4, metaLineY + 22, 28, 3);
+    ctx.fillRect(left + frameWidth - 36, metaLineY + 14, 32, 5);
+    ctx.restore();
+
+    // 3:4 照片窗发丝框 + 四角 L 型光学角标
+    ctx.strokeStyle = 'rgba(255, 244, 232, 0.38)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left + 0.5, top + 0.5, frameWidth - 1, frameHeight - 1);
+
+    var b = 12;
+    ctx.strokeStyle = '#fff8f2';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, top + b); ctx.lineTo(left, top); ctx.lineTo(left + b, top);
+    ctx.moveTo(left + frameWidth - b, top); ctx.lineTo(left + frameWidth, top); ctx.lineTo(left + frameWidth, top + b);
+    ctx.moveTo(left, top + frameHeight - b); ctx.lineTo(left, top + frameHeight); ctx.lineTo(left + b, top + frameHeight);
+    ctx.moveTo(left + frameWidth - b, top + frameHeight); ctx.lineTo(left + frameWidth, top + frameHeight); ctx.lineTo(left + frameWidth, top + frameHeight - b);
+    ctx.stroke();
+
+    // 拖动时显露三分线与中心十字微标
+    if (cardState.framingDrag) {
+      ctx.strokeStyle = 'rgba(255, 248, 240, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left + frameWidth / 3, top); ctx.lineTo(left + frameWidth / 3, top + frameHeight);
+      ctx.moveTo(left + frameWidth * 2 / 3, top); ctx.lineTo(left + frameWidth * 2 / 3, top + frameHeight);
+      ctx.moveTo(left, top + frameHeight / 3); ctx.lineTo(left + frameWidth, top + frameHeight / 3);
+      ctx.moveTo(left, top + frameHeight * 2 / 3); ctx.lineTo(left + frameWidth, top + frameHeight * 2 / 3);
+      ctx.stroke();
+      var cx = left + frameWidth / 2, cy = top + frameHeight / 2;
+      ctx.strokeStyle = 'rgba(255, 248, 240, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy);
+      ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5);
+      ctx.stroke();
+    }
   }
 
   function openCardFraming() {
@@ -1828,6 +2111,7 @@
     canvas.addEventListener('pointerdown', function (e) {
       if (!cardState.framing || e.button !== 0 || cardState.framingDrag) return;
       cardState.framingDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      renderCardFraming();
       if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 指针已释放 */ } }
     });
     canvas.addEventListener('pointermove', function (e) {
@@ -1841,7 +2125,10 @@
       drag.y = e.clientY;
     });
     function release(e) {
-      if (cardState.framingDrag && cardState.framingDrag.id === e.pointerId) cardState.framingDrag = null;
+      if (cardState.framingDrag && cardState.framingDrag.id === e.pointerId) {
+        cardState.framingDrag = null;
+        if (cardState.framing && cardState.framingBounds) renderCardFraming();
+      }
     }
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
@@ -1953,10 +2240,11 @@
 
   function bindCardInteraction() {
     var card = $('holo-card');
+    var scene = $('holo-scene');
     var activeId = null, startX = 0, startY = 0, moved = false;
 
     function updateFromPointer(e) {
-      var rect = card.getBoundingClientRect();
+      var rect = scene.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
       var nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       var ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
@@ -1964,7 +2252,7 @@
     }
 
     card.addEventListener('pointerdown', function (e) {
-      if (activeId !== null) return;
+      if (activeId !== null || e.button !== 0) return;
       activeId = e.pointerId;
       startX = e.clientX;
       startY = e.clientY;
@@ -1974,12 +2262,30 @@
       if (!isReducedMotion()) updateFromPointer(e);
     });
 
-    card.addEventListener('pointermove', function (e) {
-      if (e.pointerId !== activeId) return;
-      var dx = e.clientX - startX;
-      var dy = e.clientY - startY;
-      if (dx * dx + dy * dy > 64) moved = true;
-      if (!isReducedMotion()) updateFromPointer(e);
+    scene.addEventListener('pointerenter', function (e) {
+      if (e.pointerType === 'mouse') {
+        cardState.hovering = true;
+        if (!isReducedMotion()) updateFromPointer(e);
+      }
+    });
+
+    scene.addEventListener('pointerleave', function (e) {
+      if (e.pointerType === 'mouse') {
+        cardState.hovering = false;
+        if (activeId === null) cardState.lastInputTs = 0;
+      }
+    });
+
+    scene.addEventListener('pointermove', function (e) {
+      if (e.pointerId === activeId) {
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        if (dx * dx + dy * dy > 64) moved = true;
+        if (!isReducedMotion()) updateFromPointer(e);
+      } else if (activeId === null && e.pointerType === 'mouse') {
+        cardState.hovering = true;
+        if (!isReducedMotion()) updateFromPointer(e);
+      }
     });
 
     function end(e, allowFlip) {
@@ -1992,6 +2298,7 @@
 
     card.addEventListener('pointerup', function (e) { end(e, true); });
     card.addEventListener('pointercancel', function (e) { end(e, false); });
+    card.addEventListener('lostpointercapture', function (e) { end(e, false); });
 
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
@@ -2093,6 +2400,7 @@
     $('preview-img').hidden = true;
     previewState.original.hidden = false;
     $('preview-compare').setAttribute('aria-pressed', 'true');
+    $('preview-modal').className = 'preview-modal is-open is-comparing';
   }
 
   function showDevelopedPreview() {
@@ -2101,6 +2409,7 @@
     previewState.original.hidden = true;
     $('preview-img').hidden = false;
     $('preview-compare').setAttribute('aria-pressed', 'false');
+    if (previewState.open) $('preview-modal').className = 'preview-modal is-open';
   }
 
   function bindPreviewComparison() {
@@ -2352,8 +2661,17 @@
     fitTrays();
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
-        if (cropState) cropState.drag = null;
-        cardState.framingDrag = null;
+        if (cropState) {
+          cropState.drag = null;
+          clearTimeout(cropState.gridTimer);
+          cropState.gridTimer = 0;
+          $('crop-frame').className = 'crop-frame';
+        }
+        if (cardState.framingDrag) {
+          cardState.framingDrag = null;
+          renderCardFraming();
+        }
+        cardState.hovering = false;
         stopCardLoop();
         stopCardGyro();   // 后台不再占着陀螺仪订阅
       } else {

@@ -362,7 +362,7 @@
 
   /* 相纸卡片 1080x1440（小红书 3:4） */
   function composeCard(photo, info) {
-    var W = 1080, H = 1440, box = { x: 90, y: 70, w: 900, h: 1200 };
+    var W = 1080, H = 1440, box = { x: 90, y: 70, w: 900, h: 1185 };
     var c = makeCanvas(W, H), ctx = c.getContext('2d');
     var paper = ctx.createLinearGradient(0, 0, W, H);
     paper.addColorStop(0, '#f6f2ea'); paper.addColorStop(1, '#ece5d8');
@@ -370,15 +370,25 @@
     var scale = Math.min(box.w / photo.width, box.h / photo.height);
     var pw = Math.round(photo.width * scale), ph = Math.round(photo.height * scale);
     var px = box.x + Math.round((box.w - pw) / 2);
-    var py = photo.width > photo.height ? box.y + 60 : box.y;
+    // 画廊底锚式：横图/方图在上方画幅区光学居中，竖图贴合顶边，彻底消除底部死白
+    var py = box.y + Math.round((box.h - ph) * 0.46);
     ctx.drawImage(photo, px, py, pw, ph);
-    var textY = photo.width > photo.height ? py + ph + 110 : 1345;
-    ctx.fillStyle = '#2a1d18';
+    // 极细相纸压痕边，让照片自然嵌入纸面
+    ctx.strokeStyle = 'rgba(42, 29, 24, 0.08)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+    // 横图/方图底部留出画廊呼吸后，用极细发丝线锚定落款区
+    if (py + ph < 1240) {
+      ctx.fillStyle = 'rgba(42, 29, 24, 0.09)';
+      ctx.fillRect(box.x, 1284, box.w, 1);
+    }
+    var textY = 1344;
+    ctx.fillStyle = '#241914';
     ctx.textBaseline = 'alphabetic';
     ctx.font = '44px "Songti SC", "STSong", "SimSun", serif';
     ctx.textAlign = 'left';
     ctx.fillText(info.title, box.x, textY);
-    ctx.fillStyle = '#8a7166';
+    ctx.fillStyle = '#6c584e';
     ctx.font = '26px "SF Mono", Menlo, Consolas, monospace';
     ctx.textAlign = 'right';
     ctx.fillText(info.no + '  ' + info.date, box.x + box.w, textY);
