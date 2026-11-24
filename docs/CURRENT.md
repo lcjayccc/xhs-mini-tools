@@ -6,7 +6,7 @@
 
 | 工具 | 代码版本 | 平台状态 | 下一步 |
 |---|---|---|---|
-| darkroom（暗房冲印店） | 1.3.0 定稿，tag `darkroom/v1.3.0`，验证范围见 `CHANGELOG.md` | 2026-11-23 已送审，审核中（appId `6b0456798eb436001501df3a`） | 等审核结果，用 `redapp status` 查；驳回看 `rejectReason`。开发进度见 `TODO.md` |
+| darkroom（暗房冲印店） | 1.3.0 定稿，tag `darkroom/v1.3.0`，验证范围见 `CHANGELOG.md` | 已发布（appId `6b0456798eb436001501df3a`，2026-11-23 审核通过） | 发笔记挂载小工具：文案定稿 `.review/darkroom-1.3.0-笔记定稿.md`，配图 `.review/note-a/cards/output/`（7 张，本地，不进 git）。开发进度见 `TODO.md` |
 
 ## darkroom
 
